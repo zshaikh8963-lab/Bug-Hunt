@@ -1,0 +1,17 @@
+{
+  "name": "bug-hunt",
+  "version": "1.0.0",
+  "description": "BUG HUNT - Interactive Technical Debugging Competition Platform",
+  "scripts": {
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "dev": "concurrently -n \"SERVER,CLIENT\" -c \"cyan,green\" \"npm run dev:server\" \"npm run dev:client\"",
+    "seed": "cd server && npm run seed",
+    "build": "cd client && npm run build",
+    "start": "concurrently -n \"SERVER,CLIENT\" -c \"cyan,green\" \"npm run dev:server\" \"npm run dev:client\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

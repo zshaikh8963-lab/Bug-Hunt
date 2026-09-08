@@ -1,0 +1,63 @@
+# BUG HUNT — Technical Debugging Competition Platform
+
+# ─────────────────────────────────────────
+#  Node / npm
+# ─────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ─────────────────────────────────────────
+#  SQLite databases — never commit these!
+#  The DB is created fresh by seeding on deploy.
+# ─────────────────────────────────────────
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+
+# ─────────────────────────────────────────
+#  Environment & secrets
+# ─────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─────────────────────────────────────────
+#  Build output
+# ─────────────────────────────────────────
+client/dist/
+client/.vite/
+
+# ─────────────────────────────────────────
+#  Debug & temporary scripts
+# ─────────────────────────────────────────
+server/check_creds.js
+server/check_db.mjs
+server/check_pwd.js
+server/reset_admin_creds.js
+server/test_python.mjs
+server/test_validator.js
+
+# ─────────────────────────────────────────
+#  OS / editor
+# ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ─────────────────────────────────────────
+#  Logs
+# ─────────────────────────────────────────
+logs/
+*.log
+
+# ─────────────────────────────────────────
+#  Misc
+# ─────────────────────────────────────────
+implementation_plan.md

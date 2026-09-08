@@ -1,0 +1,627 @@
+import express from 'express';
+import bcrypt from 'bcryptjs';
+import db from '../database/db.js';
+import { authenticateAdmin } from '../middleware/auth.js';
+import { broadcastCompetitionState, broadcastWinnerReveal, broadcastLeaderboard } from '../services/socketManager.js';
+import { generateCertificatesForTeams } from '../services/certificateService.js';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const archiver = require('archiver');
+
+const router = express.Router();
+
+// Apply admin authentication to all routes below
+router.use(authenticateAdmin);
+
+// Helper: Log Admin Actions
+function logAdminAction(adminUser, action, target = '', details = '') {
+    try {
+        db.prepare(`
+            INSERT INTO admin_logs (admin_username, action, target, details)
+            VALUES (?, ?, ?, ?)
+        `).run(adminUser, action, target, details);
+    } catch (e) {
+        console.error('Failed to write admin log:', e);
+    }
+}
+
+// 1. GET /api/admin/statistics - Overview metrics for dashboard
+router.get('/statistics', (req, res) => {
+    try {
+        const totalTeams = db.prepare('SELECT COUNT(*) as c FROM teams').get().c;
+        const activeTeams = db.prepare(`SELECT COUNT(*) as c FROM teams WHERE status IN ('ROUND_1', 'ROUND_2', 'ROUND_3') AND is_disqualified = 0`).get().c;
+        const completedTeams = db.prepare(`SELECT COUNT(*) as c FROM teams WHERE status = 'FINISHED' AND is_disqualified = 0`).get().c;
+        const disqualifiedTeams = db.prepare('SELECT COUNT(*) as c FROM teams WHERE is_disqualified = 1').get().c;
+
+        const scoreStats = db.prepare(`
+            SELECT 
+                COALESCE(AVG(final_score), 0) as avg_score,
+                COALESCE(MAX(final_score), 0) as max_score
+            FROM teams
+            WHERE is_disqualified = 0 AND final_score > 0
+        `).get();
+
+        const currentLeader = db.prepare(`
+            SELECT team_name, final_score FROM teams 
+            WHERE is_disqualified = 0 
+            ORDER BY final_score DESC, r3_score DESC, total_time_sec ASC LIMIT 1
+        `).get();
+
+        const r1Count = db.prepare('SELECT COUNT(*) as c FROM mcq_questions WHERE is_active = 1').get().c;
+        const r2Count = db.prepare('SELECT COUNT(*) as c FROM java_challenges WHERE is_active = 1').get().c;
+        const r3Count = db.prepare('SELECT COUNT(*) as c FROM python_challenges WHERE is_active = 1').get().c;
+
+        const compState = db.prepare('SELECT * FROM competition_state WHERE id = 1').get();
+
+        // Recent submissions
+        const recentSubmissions = db.prepare(`
+            SELECT rs.*, t.team_name 
+            FROM round_submissions rs
+            JOIN teams t ON rs.team_id = t.team_id
+            ORDER BY rs.id DESC LIMIT 8
+        `).all();
+
+        // Recent violations
+        const recentViolations = db.prepare(`
+            SELECT v.*, t.team_name 
+            FROM violations v
+            JOIN teams t ON v.team_id = t.team_id
+            ORDER BY v.id DESC LIMIT 8
+        `).all();
+
+        return res.json({
+            success: true,
+            stats: {
+                total_teams: totalTeams,
+                active_teams: activeTeams,
+                completed_teams: completedTeams,
+                disqualified_teams: disqualifiedTeams,
+                average_score: Math.round(scoreStats.avg_score * 10) / 10,
+                max_score: scoreStats.max_score,
+                current_leader: currentLeader ? `${currentLeader.team_name} (${currentLeader.final_score}/50)` : 'None',
+                competition_state: compState,
+                question_counts: { r1: r1Count, r2: r2Count, r3: r3Count, total: r1Count + r2Count + r3Count },
+                recent_submissions: recentSubmissions,
+                recent_violations: recentViolations
+            }
+        });
+    } catch (err) {
+        console.error('Admin statistics error:', err);
+        return res.status(500).json({ error: 'Failed to retrieve statistics.' });
+    }
+});
+
+// 2. GET /api/admin/teams - All teams with 4 members, scores, status, violations
+router.get('/teams', (req, res) => {
+    try {
+        const teams = db.prepare(`
+            SELECT * FROM teams 
+            ORDER BY is_disqualified ASC, final_score DESC, id ASC
+        `).all();
+
+        const formatted = teams.map(t => {
+            const members = db.prepare('SELECT * FROM team_members WHERE team_id = ? ORDER BY member_number ASC').all(t.team_id);
+            return {
+                ...t,
+                is_disqualified: Boolean(t.is_disqualified),
+                members
+            };
+        });
+
+        return res.json({
+            success: true,
+            count: formatted.length,
+            teams: formatted
+        });
+    } catch (err) {
+        console.error('Admin teams error:', err);
+        return res.status(500).json({ error: 'Failed to retrieve teams.' });
+    }
+});
+
+// Team Actions: Disqualify, Restore, Reset, Adjust Score
+router.post('/teams/:teamId/:action', (req, res) => {
+    try {
+        const { teamId, action } = req.params;
+        const { reason = '', new_score } = req.body;
+        const team = db.prepare('SELECT * FROM teams WHERE team_id = ?').get(teamId);
+
+        if (!team) return res.status(404).json({ error: 'Team not found.' });
+
+        if (action === 'disqualify') {
+            db.prepare(`
+                UPDATE teams 
+                SET is_disqualified = 1, status = 'DISQUALIFIED', disqualify_reason = ? 
+                WHERE team_id = ?
+            `).run(reason || 'Disqualified by Competition Administrator', teamId);
+            logAdminAction(req.admin.username, 'DISQUALIFY_TEAM', teamId, reason);
+
+        } else if (action === 'restore') {
+            db.prepare(`
+                UPDATE teams 
+                SET is_disqualified = 0, status = 'WAITING', disqualify_reason = '', violations_count = 0 
+                WHERE team_id = ?
+            `).run(teamId);
+            logAdminAction(req.admin.username, 'RESTORE_TEAM', teamId, 'Restored team access');
+
+        } else if (action === 'reset-session') {
+            db.prepare('DELETE FROM round_submissions WHERE team_id = ?').run(teamId);
+            db.prepare('DELETE FROM round_assignments WHERE team_id = ?').run(teamId);
+            db.prepare(`
+                UPDATE teams 
+                SET r1_score = 0, r2_score = 0, r3_score = 0, final_score = 0,
+                    status = 'WAITING', current_round = 1, total_time_sec = 0,
+                    r1_finished_at = NULL, r2_finished_at = NULL, r3_finished_at = NULL
+                WHERE team_id = ?
+            `).run(teamId);
+            logAdminAction(req.admin.username, 'RESET_TEAM_SESSION', teamId, 'Wiped round progress');
+
+        } else if (action === 'adjust-score') {
+            const adjusted = Math.min(50, Math.max(0, parseFloat(new_score) || 0));
+            db.prepare('UPDATE teams SET final_score = ? WHERE team_id = ?').run(adjusted, teamId);
+            logAdminAction(req.admin.username, 'ADJUST_SCORE', teamId, `Adjusted final score to ${adjusted}`);
+        } else {
+            return res.status(400).json({ error: `Unknown action: ${action}` });
+        }
+
+        const updated = db.prepare('SELECT * FROM teams WHERE team_id = ?').get(teamId);
+        return res.json({ success: true, message: `Team action ${action} executed successfully.`, team: updated });
+
+    } catch (err) {
+        console.error('Team action error:', err);
+        return res.status(500).json({ error: 'Failed to execute team action.' });
+    }
+});
+
+// 3. POST /api/admin/competition/control - Tournament Round Control
+router.post('/competition/control', (req, res) => {
+    try {
+        const { action, round, message = '' } = req.body;
+        // Actions: 'START_ROUND', 'LOCK_ROUND', 'PAUSE', 'RESUME', 'END', 'RESET'
+        const comp = db.prepare('SELECT * FROM competition_state WHERE id = 1').get();
+
+        if (action === 'START_ROUND') {
+            const r = parseInt(round, 10) || 1;
+            const statusKey = `ROUND_${r}_ACTIVE`;
+            const msg = message || `ROUND ${r} IS NOW LIVE! Begin debugging!`;
+
+            db.prepare(`
+                UPDATE competition_state 
+                SET status = ?, active_round = ?, is_paused = 0, message = ?, 
+                    round_started_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE id = 1
+            `).run(statusKey, r, msg);
+
+            // Update all waiting teams to this round
+            db.prepare(`
+                UPDATE teams 
+                SET status = ?, current_round = ?
+                WHERE is_disqualified = 0 AND status IN ('WAITING', 'ROUND_1_DONE', 'ROUND_2_DONE')
+            `).run(`ROUND_${r}`, r);
+
+            logAdminAction(req.admin.username, `START_ROUND_${r}`, 'COMPETITION', msg);
+
+        } else if (action === 'LOCK_ROUND') {
+            const r = parseInt(round, 10) || comp.active_round;
+            const statusKey = `ROUND_${r}_COMPLETED`;
+            const msg = message || `Round ${r} concluded! Submissions locked.`;
+
+            db.prepare(`
+                UPDATE competition_state 
+                SET status = ?, message = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = 1
+            `).run(statusKey, msg);
+
+            logAdminAction(req.admin.username, `LOCK_ROUND_${r}`, 'COMPETITION', msg);
+
+        } else if (action === 'PAUSE') {
+            db.prepare(`
+                UPDATE competition_state 
+                SET is_paused = 1, paused_at = CURRENT_TIMESTAMP, 
+                    message = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = 1
+            `).run(message || 'COMPETITION PAUSED BY ORGANIZER. Please wait.');
+
+            logAdminAction(req.admin.username, 'PAUSE_COMPETITION', 'COMPETITION', message);
+
+        } else if (action === 'RESUME') {
+            db.prepare(`
+                UPDATE competition_state 
+                SET is_paused = 0, paused_at = NULL, 
+                    message = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = 1
+            `).run(message || 'Competition Resumed! Continue debugging!');
+
+            logAdminAction(req.admin.username, 'RESUME_COMPETITION', 'COMPETITION', message);
+
+        } else if (action === 'END') {
+            db.prepare(`
+                UPDATE competition_state 
+                SET status = 'FINISHED', is_paused = 0, ended_at = CURRENT_TIMESTAMP,
+                    results_locked = 1, message = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = 1
+            `).run(message || 'BUG HUNT Competition Finished! Calculating awards and certificates.');
+
+            logAdminAction(req.admin.username, 'END_COMPETITION', 'COMPETITION', message);
+
+        } else if (action === 'RESET_TOURNAMENT') {
+            db.prepare('DELETE FROM certificates').run();
+            db.prepare('DELETE FROM round_submissions').run();
+            db.prepare('DELETE FROM round_assignments').run();
+            db.prepare('DELETE FROM violations').run();
+            db.prepare(`
+                UPDATE teams 
+                SET r1_score = 0, r2_score = 0, r3_score = 0, final_score = 0,
+                    status = 'WAITING', current_round = 1, total_time_sec = 0,
+                    is_disqualified = 0, violations_count = 0,
+                    r1_finished_at = NULL, r2_finished_at = NULL, r3_finished_at = NULL
+            `).run();
+
+            db.prepare(`
+                UPDATE competition_state 
+                SET status = 'WAITING', active_round = 0, is_paused = 0,
+                    results_locked = 0, winner_reveal_state = 'NONE',
+                    round_started_at = NULL, paused_at = NULL, ended_at = NULL,
+                    message = 'Tournament Reset. Ready for Round 1 start.'
+                WHERE id = 1
+            `).run();
+
+            logAdminAction(req.admin.username, 'RESET_TOURNAMENT', 'COMPETITION', 'Reset all tournament progress');
+        }
+
+        const updatedState = db.prepare('SELECT * FROM competition_state WHERE id = 1').get();
+        broadcastCompetitionState(updatedState);
+
+        return res.json({
+            success: true,
+            message: `Competition action ${action} executed.`,
+            state: updatedState
+        });
+
+    } catch (err) {
+        console.error('Round control error:', err);
+        return res.status(500).json({ error: 'Failed to update competition control state.' });
+    }
+});
+
+// 4. POST /api/admin/projector/reveal - Winner Reveal Mode Controller
+router.post('/projector/reveal', (req, res) => {
+    try {
+        const { state: revealState } = req.body;
+        // revealState: 'NONE', 'THIRD_PLACE', 'SECOND_PLACE', 'WINNER'
+
+        db.prepare(`
+            UPDATE competition_state 
+            SET winner_reveal_state = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = 1
+        `).run(revealState || 'NONE');
+
+        // Query top 3 teams
+        const topTeams = db.prepare(`
+            SELECT team_id, team_name, department, college, final_score, r3_score, total_time_sec 
+            FROM teams 
+            WHERE is_disqualified = 0 
+            ORDER BY final_score DESC, r3_score DESC, total_time_sec ASC 
+            LIMIT 3
+        `).all();
+
+        let targetTeam = null;
+        if (revealState === 'THIRD_PLACE' && topTeams[2]) {
+            targetTeam = { ...topTeams[2], place: '3rd Place', medal: '🥉' };
+        } else if (revealState === 'SECOND_PLACE' && topTeams[1]) {
+            targetTeam = { ...topTeams[1], place: '2nd Place', medal: '🥈' };
+        } else if (revealState === 'WINNER' && topTeams[0]) {
+            targetTeam = { ...topTeams[0], place: 'Champion / 1st Place', medal: '🏆' };
+        }
+
+        broadcastWinnerReveal(revealState, targetTeam);
+        logAdminAction(req.admin.username, 'PROJECTOR_WINNER_REVEAL', revealState, targetTeam?.team_name || '');
+
+        return res.json({
+            success: true,
+            reveal_state: revealState,
+            team: targetTeam
+        });
+
+    } catch (err) {
+        console.error('Projector reveal error:', err);
+        return res.status(500).json({ error: 'Failed to set reveal state.' });
+    }
+});
+
+// 5. POST /api/admin/results/lock - Lock results permanently
+router.post('/results/lock', (req, res) => {
+    try {
+        db.prepare('UPDATE competition_state SET results_locked = 1, updated_at = CURRENT_TIMESTAMP WHERE id = 1').run();
+        logAdminAction(req.admin.username, 'LOCK_FINAL_RESULTS', 'COMPETITION', 'Results finalized and locked');
+        return res.json({ success: true, message: 'Final results locked.' });
+    } catch (err) {
+        console.error('Lock results error:', err);
+        return res.status(500).json({ error: 'Failed to lock results.' });
+    }
+});
+
+// 6. GET /api/admin/export-csv - Download complete competition results as CSV
+router.get('/export-csv', (req, res) => {
+    try {
+        const teams = db.prepare(`
+            SELECT * FROM teams 
+            ORDER BY is_disqualified ASC, final_score DESC, r3_score DESC, total_time_sec ASC
+        `).all();
+
+        let csv = 'Rank,Team ID,Team Name,Department,College,Pass Code,Student 1,Student 2,Student 3,Student 4,Round 1 (/10),Round 2 (/15),Round 3 (/25),Final Score (/50),Time (sec),Status,Disqualified\n';
+
+        teams.forEach((t, i) => {
+            const members = db.prepare('SELECT name FROM team_members WHERE team_id = ? ORDER BY member_number ASC').all(t.team_id);
+            const m1 = members[0]?.name || '';
+            const m2 = members[1]?.name || '';
+            const m3 = members[2]?.name || '';
+            const m4 = members[3]?.name || '';
+
+            const clean = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
+
+            csv += [
+                i + 1,
+                clean(t.team_id),
+                clean(t.team_name),
+                clean(t.department),
+                clean(t.college),
+                clean(t.pass_code),
+                clean(m1),
+                clean(m2),
+                clean(m3),
+                clean(m4),
+                t.r1_score || 0,
+                t.r2_score || 0,
+                t.r3_score || 0,
+                t.final_score || 0,
+                t.total_time_sec || 0,
+                clean(t.status),
+                t.is_disqualified ? 'YES' : 'NO'
+            ].join(',') + '\n';
+        });
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename="BUG_HUNT_2026_RESULTS.csv"');
+        return res.send(csv);
+
+    } catch (err) {
+        console.error('CSV export error:', err);
+        return res.status(500).json({ error: 'Failed to export CSV.' });
+    }
+});
+
+// 7. Certificates API: Generate, List, Revoke
+router.post('/certificates/generate', (req, res) => {
+    try {
+        const { filter = 'all' } = req.body;
+        const created = generateCertificatesForTeams(filter);
+        logAdminAction(req.admin.username, 'GENERATE_CERTIFICATES', filter, `Issued ${created.length} certificates`);
+
+        return res.json({
+            success: true,
+            message: `Generated ${created.length} certificates successfully.`,
+            count: created.length,
+            certificates: created
+        });
+    } catch (err) {
+        console.error('Generate certificates error:', err);
+        return res.status(500).json({ error: 'Failed to generate certificates.' });
+    }
+});
+
+router.get('/certificates/list', (req, res) => {
+    try {
+        const certs = db.prepare(`
+            SELECT c.*, t.department, t.college
+            FROM certificates c
+            LEFT JOIN teams t ON c.team_id = t.team_id
+            ORDER BY c.rank ASC, c.team_id ASC, c.member_number ASC
+        `).all();
+
+        return res.json({
+            success: true,
+            count: certs.length,
+            certificates: certs
+        });
+    } catch (err) {
+        console.error('List certificates error:', err);
+        return res.status(500).json({ error: 'Failed to list certificates.' });
+    }
+});
+
+router.post('/certificates/:certId/revoke', (req, res) => {
+    try {
+        const { certId } = req.params;
+        db.prepare(`UPDATE certificates SET status = 'REVOKED' WHERE certificate_id = ?`).run(certId);
+        logAdminAction(req.admin.username, 'REVOKE_CERTIFICATE', certId, 'Revoked certificate');
+        return res.json({ success: true, message: `Certificate ${certId} revoked.` });
+    } catch (err) {
+        console.error('Revoke cert error:', err);
+        return res.status(500).json({ error: 'Failed to revoke certificate.' });
+    }
+});
+
+// Download ZIP of all certificates data
+router.get('/certificates/export-zip', (req, res) => {
+    try {
+        const certs = db.prepare(`
+            SELECT c.*, t.department, t.college 
+            FROM certificates c 
+            LEFT JOIN teams t ON c.team_id = t.team_id
+            WHERE c.status = 'ACTIVE'
+            ORDER BY c.rank ASC, c.team_id ASC, c.member_number ASC
+        `).all();
+
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', 'attachment; filename="BUG_HUNT_CERTIFICATES_2026.zip"');
+
+        const archive = archiver('zip', { zlib: { level: 9 } });
+        archive.pipe(res);
+
+        // Add master index json
+        archive.append(JSON.stringify(certs, null, 2), { name: 'certificates_manifest.json' });
+
+        // Add formatted CSV
+        let csv = 'Certificate ID,Student Name,Team Name,Member #,Achievement,Rank,Final Score,Date,Status\n';
+        certs.forEach(c => {
+            const clean = (v) => `"${String(v || '').replace(/"/g, '""')}"`;
+            csv += [
+                clean(c.certificate_id),
+                clean(c.student_name),
+                clean(c.team_name),
+                c.member_number,
+                clean(c.achievement),
+                c.rank,
+                c.final_score,
+                clean(c.competition_date),
+                clean(c.status)
+            ].join(',') + '\n';
+        });
+        archive.append(csv, { name: 'certificates_index.csv' });
+
+        archive.finalize();
+
+    } catch (err) {
+        console.error('Export zip error:', err);
+        return res.status(500).json({ error: 'Failed to generate ZIP archive.' });
+    }
+});
+
+// 8. Settings API
+router.get('/settings', (req, res) => {
+    try {
+        const settings = db.prepare('SELECT * FROM competition_settings WHERE id = 1').get();
+        return res.json({ success: true, settings });
+    } catch (err) {
+        console.error('Get settings error:', err);
+        return res.status(500).json({ error: 'Failed to fetch settings.' });
+    }
+});
+
+router.put('/settings', (req, res) => {
+    try {
+        const {
+            college_name, department, event_name, competition_date,
+            venue, coordinator_name, hod_name, principal_name,
+            show_score = 1, show_rank = 1, show_qr = 1
+        } = req.body;
+
+        db.prepare(`
+            UPDATE competition_settings SET
+                college_name = COALESCE(?, college_name),
+                department = COALESCE(?, department),
+                event_name = COALESCE(?, event_name),
+                competition_date = COALESCE(?, competition_date),
+                venue = COALESCE(?, venue),
+                coordinator_name = COALESCE(?, coordinator_name),
+                hod_name = COALESCE(?, hod_name),
+                principal_name = COALESCE(?, principal_name),
+                show_score = COALESCE(?, show_score),
+                show_rank = COALESCE(?, show_rank),
+                show_qr = COALESCE(?, show_qr),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = 1
+        `).run(
+            college_name, department, event_name, competition_date,
+            venue, coordinator_name, hod_name, principal_name,
+            show_score, show_rank, show_qr
+        );
+
+        logAdminAction(req.admin.username, 'UPDATE_SETTINGS', 'SETTINGS', 'Updated event branding and metadata');
+
+        const updated = db.prepare('SELECT * FROM competition_settings WHERE id = 1').get();
+        return res.json({ success: true, settings: updated });
+    } catch (err) {
+        console.error('Update settings error:', err);
+        return res.status(500).json({ error: 'Failed to update settings.' });
+    }
+});
+
+// POST /api/admin/change-password - Securely change admin username and password
+router.post('/change-password', (req, res) => {
+    try {
+        const { current_password, new_username, new_password } = req.body;
+        if (!current_password || !new_password) {
+            return res.status(400).json({ error: 'Current password and new password are required.' });
+        }
+
+        const admin = db.prepare('SELECT * FROM admin_users WHERE username = ?').get(req.admin.username);
+        if (!admin) {
+            return res.status(404).json({ error: 'Admin account not found.' });
+        }
+
+        const isMatch = bcrypt.compareSync(current_password, admin.password_hash);
+        if (!isMatch) {
+            return res.status(401).json({ error: 'Incorrect current password.' });
+        }
+
+        if (new_password.trim().length < 6) {
+            return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+        }
+
+        const salt = bcrypt.genSaltSync(10);
+        const newHash = bcrypt.hashSync(new_password.trim(), salt);
+        const updatedUsername = (new_username && new_username.trim()) ? new_username.trim() : admin.username;
+
+        db.prepare('UPDATE admin_users SET username = ?, password_hash = ? WHERE id = ?').run(updatedUsername, newHash, admin.id);
+
+        // Keep master fallback 'admin' account updated with same password so organizer is never locked out
+        try {
+            db.prepare(`
+                INSERT INTO admin_users (username, password_hash)
+                VALUES ('admin', ?)
+                ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash
+            `).run(newHash);
+        } catch (e) {}
+
+        logAdminAction(admin.username, 'CHANGE_PASSWORD', 'ADMIN_AUTH', `Updated admin credentials to username="${updatedUsername}"`);
+
+        return res.json({ success: true, message: 'Admin credentials updated successfully! Please re-login with your new credentials.' });
+    } catch (err) {
+        console.error('Change password error:', err);
+        return res.status(500).json({ error: 'Failed to update admin credentials.' });
+    }
+});
+
+// 9. Question Bank Management (CRUD for R1, R2, R3)
+router.get('/questions-bank', (req, res) => {
+    try {
+        const r1 = db.prepare('SELECT * FROM mcq_questions ORDER BY language, id').all();
+        const r2 = db.prepare('SELECT * FROM java_challenges ORDER BY id').all();
+        const r3 = db.prepare('SELECT * FROM python_challenges ORDER BY id').all();
+
+        const formattedR1 = r1.map(q => {
+            let options = [];
+            try { options = JSON.parse(q.options_json); } catch (e) { options = []; }
+            return { ...q, options };
+        });
+        const formattedR3 = r3.map(p => {
+            let visible_tests = [];
+            let hidden_tests = [];
+            try { visible_tests = JSON.parse(p.visible_tests_json); } catch (e) { visible_tests = []; }
+            try { hidden_tests = JSON.parse(p.hidden_tests_json); } catch (e) { hidden_tests = []; }
+            return {
+                ...p,
+                visible_tests,
+                hidden_tests
+            };
+        });
+
+        return res.json({
+            success: true,
+            r1: formattedR1,
+            r1_mcqs: formattedR1,
+            r2: r2,
+            r2_java: r2,
+            r3: formattedR3,
+            r3_python: formattedR3
+        });
+    } catch (err) {
+        console.error('Question bank error:', err);
+        return res.status(500).json({ error: 'Failed to retrieve question bank.' });
+    }
+});
+
+export default router;
