@@ -5,6 +5,7 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
+    "build": "echo 'Backend build ready'",
     "start": "node server.js",
     "seed": "node database/seed.js",
     "dev": "node --watch server.js"
