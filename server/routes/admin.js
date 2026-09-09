@@ -5,6 +5,7 @@ import { authenticateAdmin } from '../middleware/auth.js';
 import { broadcastCompetitionState, broadcastWinnerReveal, broadcastLeaderboard } from '../services/socketManager.js';
 import { generateCertificatesForTeams } from '../services/certificateService.js';
 import { createRequire } from 'module';
+import { parseCSVToObjects } from '../services/csvParser.js';
 
 const require = createRequire(import.meta.url);
 const archiver = require('archiver');
@@ -628,6 +629,136 @@ router.get('/questions-bank', (req, res) => {
         console.error('Question bank error:', err);
         return res.status(500).json({ error: 'Failed to retrieve question bank.' });
     }
+});
+
+// Helper: Map CSV answer column to 0-3 index
+function parseCorrectOptionIndex(val, options) {
+    const s = String(val || '').trim();
+    const upper = s.toUpperCase();
+    if (upper === 'A' || upper === 'OPTION A') return 0;
+    if (upper === 'B' || upper === 'OPTION B') return 1;
+    if (upper === 'C' || upper === 'OPTION C') return 2;
+    if (upper === 'D' || upper === 'OPTION D') return 3;
+
+    for (let i = 0; i < options.length; i++) {
+        if (options[i] && options[i].trim().toLowerCase() === s.toLowerCase()) {
+            return i;
+        }
+    }
+
+    const num = parseInt(s, 10);
+    if (!isNaN(num)) {
+        if (num >= 1 && num <= 4) return num - 1;
+        if (num === 0) return 0;
+    }
+
+    return 0;
+}
+
+// GET /api/admin/questions/csv-template - Download starter CSV template for Round 1
+router.get('/questions/csv-template', (req, res) => {
+    const csvContent = [
+        'language,difficulty,title,question_text,code_snippet,option_a,option_b,option_c,option_d,correct_option,explanation',
+        'C,Easy,Post-Increment Output,What is the output of the following C code?,"int x = 5;\\nprintf(\\"\"%d\\\"\", x++);",4,5,6,Error,B,"x++ evaluates to 5 before incrementing."',
+        'C,Easy,Standard I/O Header,Which header file is required for printf()?,stdlib.h,string.h,stdio.h,math.h,C,"stdio.h contains declaration for printf()."',
+        'C++,Easy,Standard Output Stream,Which stream is commonly used for output in C++?,cin,cout,print,output,B,"std::cout is the standard output stream."',
+        'Java,Easy,Object Instantiation Keyword,Which keyword is used to create an object in Java?,create,object,new,malloc,C,"The new operator instantiates a class."',
+        'Python,Easy,Single-Line Comment Symbol,Which symbol is used for a single-line comment in Python?,//,#,/*,--,B,"Python uses # for single-line comments."',
+        'HTML,Easy,HTML Full Form,What does HTML stand for?,Hyper Text Markup Language,High Text Machine Language,Hyperlink Text Management Language,Home Tool Markup Language,A,"HTML stands for HyperText Markup Language."'
+    ].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="ROUND_1_MCQ_TEMPLATE.csv"');
+    return res.send(csvContent);
+});
+
+// POST /api/admin/questions/import-csv - Bulk import questions from CSV
+router.post('/questions/import-csv', (req, res) => {
+    try {
+        const { csvText, round = 'r1', mode = 'append' } = req.body;
+
+        if (!csvText || typeof csvText !== 'string' || !csvText.trim()) {
+            return res.status(400).json({ error: 'Please upload or provide valid CSV content.' });
+        }
+
+        const { headers, objects, error } = parseCSVToObjects(csvText);
+
+        if (error) {
+            return res.status(400).json({ error });
+        }
+
+        if (objects.length === 0) {
+            return res.status(400).json({ error: 'CSV file contains no data rows.' });
+        }
+
+        if (round === 'r1') {
+            const hasRequired = headers.some(h => ['question_text', 'question', 'text', 'title'].includes(h));
+            if (!hasRequired) {
+                return res.status(400).json({
+                    error: 'CSV missing required question columns. Must contain headers: language, title, question_text, option_a, option_b, option_c, option_d, correct_option'
+                });
+            }
+
+            if (mode === 'replace') {
+                db.prepare('DELETE FROM mcq_questions').run();
+                db.prepare('DELETE FROM round_assignments WHERE round_num = 1').run();
+            }
+
+            const insertMcq = db.prepare(`
+                INSERT INTO mcq_questions (language, difficulty, title, question_text, code_snippet, options_json, correct_option_index, explanation, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+            `);
+
+            let insertedCount = 0;
+            const insertTx = db.transaction((rows) => {
+                for (const row of rows) {
+                    const qText = row.question_text || row.question || row.text || row.title;
+                    if (!qText) continue;
+
+                    const title = row.title || (qText.length > 40 ? qText.substring(0, 40) + '...' : qText);
+                    let lang = (row.language || row.lang || 'C').trim();
+                    const normLang = lang.toUpperCase();
+                    if (normLang === 'CPP' || normLang === 'C++') lang = 'C++';
+                    else if (normLang === 'JAVA') lang = 'Java';
+                    else if (normLang === 'PYTHON' || normLang === 'PY') lang = 'Python';
+                    else if (normLang === 'HTML') lang = 'HTML';
+                    else lang = 'C';
+
+                    const diff = ['Easy', 'Medium', 'Hard'].find(d => d.toLowerCase() === (row.difficulty || '').toLowerCase()) || 'Easy';
+                    const code = row.code_snippet || row.code || '';
+                    
+                    const optA = row.option_a || row.a || row.option1 || 'Option A';
+                    const optB = row.option_b || row.b || row.option2 || 'Option B';
+                    const optC = row.option_c || row.c || row.option3 || 'Option C';
+                    const optD = row.option_d || row.d || row.option4 || 'Option D';
+                    const options = [optA, optB, optC, optD];
+
+                    const correctIdx = parseCorrectOptionIndex(row.correct_option || row.answer || row.ans || row.correct, options);
+                    const explanation = row.explanation || row.explain || '';
+
+                    insertMcq.run(lang, diff, title, qText, code, JSON.stringify(options), correctIdx, explanation);
+                    insertedCount++;
+                }
+            });
+
+            insertTx(objects);
+
+            logAdminAction(req.admin.username, 'IMPORT_CSV_QUESTIONS', 'ROUND_1', `Imported ${insertedCount} questions via CSV (mode=${mode})`);
+
+            return res.json({
+                success: true,
+                count: insertedCount,
+                message: `Successfully imported ${insertedCount} Round 1 MCQs from CSV (${mode === 'replace' ? 'replaced existing questions' : 'added to existing'})!`
+            });
+        }
+
+        return res.status(400).json({ error: `CSV import for round "${round}" is not supported.` });
+    } catch (err) {
+        console.error('CSV import error:', err);
+        return res.status(500).json({ error: 'Failed to import CSV: ' + err.message });
+    }
+});
+
 // POST /api/admin/questions/reseed - Force reload official tournament question banks
 router.post('/questions/reseed', async (req, res) => {
     try {

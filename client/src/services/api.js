@@ -264,6 +264,20 @@ export const api = {
             headers: this.getAdminHeaders()
         });
         return res.json();
+    },
+
+    async importQuestionsCSV(round, csvText, mode = 'append') {
+        const res = await fetch(`${API_BASE}/admin/questions/import-csv`, {
+            method: 'POST',
+            headers: this.getAdminHeaders(),
+            body: JSON.stringify({ round, csvText, mode })
+        });
+        return res.json();
+    },
+
+    getCSVTemplateUrl(round = 'r1') {
+        const token = localStorage.getItem('bughunt_admin_token') || '';
+        return `${API_BASE}/admin/questions/csv-template?token=${encodeURIComponent(token)}`;
     }
 };
 

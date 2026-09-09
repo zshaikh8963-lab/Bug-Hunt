@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { 
   Bug, Plus, Search, Filter, Edit3, Trash2, Copy, CheckCircle2, 
   XCircle, Eye, EyeOff, AlertTriangle, Code2, Sparkles, Check, 
-  ChevronDown, ChevronUp, Play, HelpCircle, Layers, FileCode
+  ChevronDown, ChevronUp, Play, HelpCircle, Layers, FileCode,
+  Upload, Download, FileSpreadsheet
 } from 'lucide-react';
 import { api } from '../services/api';
 import { soundService } from '../services/sound';
@@ -33,6 +34,15 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
   const [testRunResult, setTestRunResult] = useState(null);
   const [testingCode, setTestingCode] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
+
+  // CSV Import State
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [csvText, setCsvText] = useState('');
+  const [csvFileName, setCsvFileName] = useState('');
+  const [csvImportMode, setCsvImportMode] = useState('append'); // 'append' | 'replace'
+  const [csvPreviewCount, setCsvPreviewCount] = useState(0);
+  const [importingCsv, setImportingCsv] = useState(false);
+  const [csvError, setCsvError] = useState('');
 
   // Filtered lists
   const currentList = useMemo(() => {
@@ -292,6 +302,79 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
     }
   };
 
+  // Handle CSV file selection
+  const handleCSVFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvFileName(file.name);
+    setCsvError('');
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result || '';
+      setCsvText(content);
+      const rows = content.split(/\r?\n/).filter(r => r.trim().length > 0);
+      setCsvPreviewCount(Math.max(0, rows.length - 1));
+    };
+    reader.onerror = () => setCsvError('Failed to read the selected CSV file.');
+    reader.readAsText(file);
+  };
+
+  // Download official CSV template
+  const handleDownloadCSVTemplate = () => {
+    soundService.playClick();
+    const csvContent = [
+      'language,difficulty,title,question_text,code_snippet,option_a,option_b,option_c,option_d,correct_option,explanation',
+      'C,Easy,Post-Increment Output,What is the output of the following C code?,"int x = 5;\\nprintf(\\"\"%d\\\"\", x++);",4,5,6,Error,B,"x++ evaluates to 5 before incrementing."',
+      'C,Easy,Standard I/O Header,Which header file is required for printf()?,stdlib.h,string.h,stdio.h,math.h,C,"stdio.h contains declaration for printf()."',
+      'C++,Easy,Standard Output Stream,Which stream is commonly used for output in C++?,cin,cout,print,output,B,"std::cout is the standard output stream."',
+      'Java,Easy,Object Instantiation Keyword,Which keyword is used to create an object in Java?,create,object,new,malloc,C,"The new operator instantiates a class."',
+      'Python,Easy,Single-Line Comment Symbol,Which symbol is used for a single-line comment in Python?,//,#,/*,--,B,"Python uses # for single-line comments."',
+      'HTML,Easy,HTML Full Form,What does HTML stand for?,Hyper Text Markup Language,High Text Machine Language,Hyperlink Text Management Language,Home Tool Markup Language,A,"HTML stands for HyperText Markup Language."'
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'ROUND_1_MCQ_TEMPLATE.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  // Submit CSV Import to Server
+  const handleImportCSVSubmit = async () => {
+    if (!csvText || !csvText.trim()) {
+      setCsvError('Please upload or choose a valid CSV file.');
+      return;
+    }
+    soundService.playClick();
+    setImportingCsv(true);
+    setCsvError('');
+    try {
+      const res = await api.importQuestionsCSV(activeRound, csvText, csvImportMode);
+      if (res.success) {
+        soundService.playVictory();
+        showBanner?.(res.message || `Imported ${res.count} questions from CSV!`);
+        setCsvModalOpen(false);
+        setCsvText('');
+        setCsvFileName('');
+        setCsvPreviewCount(0);
+        onRefresh?.();
+      } else {
+        soundService.playWrong();
+        setCsvError(res.error || 'Failed to import CSV.');
+      }
+    } catch (err) {
+      soundService.playWrong();
+      setCsvError('Import error: ' + err.message);
+    } finally {
+      setImportingCsv(false);
+    }
+  };
+
   // Delete Question
   const handleConfirmDelete = async () => {
     if (!deleteModal) return;
@@ -363,6 +446,15 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
           >
             <Sparkles className="w-4 h-4 text-amber-400" />
             <span>{reseeding ? 'Reloading...' : 'Reload Official Questions'}</span>
+          </button>
+
+          <button
+            onClick={() => { soundService.playClick(); setCsvModalOpen(true); setCsvError(''); }}
+            className="px-4 py-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 font-bold transition flex items-center justify-center gap-2 text-xs"
+            title="Import questions from a .csv file"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+            <span>Import .CSV</span>
           </button>
 
           <button
@@ -536,6 +628,13 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
               >
                 <Sparkles className="w-4 h-4 text-slate-950" />
                 <span>{reseeding ? 'Loading Official Questions...' : '🚀 Load 50 Official Tournament MCQs & Challenges'}</span>
+              </button>
+              <button
+                onClick={() => { soundService.playClick(); setCsvModalOpen(true); setCsvError(''); }}
+                className="px-4 py-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 font-bold transition text-xs flex items-center gap-2"
+              >
+                <Upload className="w-4 h-4 text-emerald-400" />
+                <span>Upload .CSV File</span>
               </button>
               <button
                 onClick={handleOpenCreate}
@@ -1638,6 +1737,153 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
                 Yes, Delete Question
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* CSV IMPORT MODAL */}
+      {/* ========================================================= */}
+      {csvModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="max-w-xl w-full bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl space-y-5 my-8 font-mono text-xs">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-base font-bold text-slate-100 uppercase tracking-wide">
+                  Import Questions via .CSV
+                </h3>
+              </div>
+              <button
+                onClick={() => setCsvModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Step 1: Download Template */}
+            <div className="p-4 rounded-2xl border border-slate-800 bg-slate-950/60 flex items-center justify-between gap-4">
+              <div>
+                <span className="text-slate-200 font-bold block">Need the CSV Template?</span>
+                <span className="text-[11px] text-slate-400 block mt-0.5">
+                  Download our pre-formatted spreadsheet with headers for C, C++, Java, Python & HTML.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleDownloadCSVTemplate}
+                className="px-3.5 py-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 font-bold transition flex items-center gap-1.5 shrink-0 text-xs shadow-sm"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Template .CSV</span>
+              </button>
+            </div>
+
+            {/* Step 2: Upload File */}
+            <div className="space-y-2">
+              <label className="text-slate-300 font-bold block">Select .CSV File:</label>
+              <div className="border-2 border-dashed border-slate-700 hover:border-emerald-500/60 rounded-2xl p-6 text-center bg-slate-950/40 transition cursor-pointer relative group">
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleCSVFileSelect}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                />
+                <Upload className="w-8 h-8 text-slate-500 group-hover:text-emerald-400 mx-auto mb-2 transition" />
+                <p className="text-slate-200 font-bold">
+                  {csvFileName ? (
+                    <span className="text-emerald-400">{csvFileName}</span>
+                  ) : (
+                    'Click to browse or drop your .csv file here'
+                  )}
+                </p>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  {csvPreviewCount > 0 ? (
+                    <span className="text-emerald-300 font-bold">✓ Ready: ~{csvPreviewCount} question rows detected</span>
+                  ) : (
+                    'Supports standard UTF-8 encoded CSV files'
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Step 3: Import Mode */}
+            <div className="space-y-2">
+              <label className="text-slate-300 font-bold block">Import Mode:</label>
+              <div className="grid grid-cols-2 gap-3">
+                <label
+                  className={`p-3 rounded-xl border cursor-pointer transition flex items-center gap-2.5 ${
+                    csvImportMode === 'append'
+                      ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-300 font-bold'
+                      : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="csvMode"
+                    value="append"
+                    checked={csvImportMode === 'append'}
+                    onChange={() => setCsvImportMode('append')}
+                    className="accent-emerald-400"
+                  />
+                  <span>Add to Existing</span>
+                </label>
+
+                <label
+                  className={`p-3 rounded-xl border cursor-pointer transition flex items-center gap-2.5 ${
+                    csvImportMode === 'replace'
+                      ? 'border-amber-500/60 bg-amber-500/10 text-amber-300 font-bold'
+                      : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="csvMode"
+                    value="replace"
+                    checked={csvImportMode === 'replace'}
+                    onChange={() => setCsvImportMode('replace')}
+                    className="accent-amber-400"
+                  />
+                  <span>Replace All Questions</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Error Banner */}
+            {csvError && (
+              <div className="p-3 rounded-xl border border-rose-500/40 bg-rose-500/10 text-rose-300 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{csvError}</span>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="pt-3 border-t border-slate-800 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setCsvModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleImportCSVSubmit}
+                disabled={importingCsv || !csvText}
+                className={`px-5 py-2.5 rounded-xl font-bold transition flex items-center gap-2 shadow-lg ${
+                  !csvText || importingCsv
+                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                    : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-emerald-500/20'
+                }`}
+              >
+                <Upload className="w-4 h-4" />
+                <span>{importingCsv ? 'Importing Questions...' : 'Import Questions Now'}</span>
+              </button>
+            </div>
+
           </div>
         </div>
       )}
