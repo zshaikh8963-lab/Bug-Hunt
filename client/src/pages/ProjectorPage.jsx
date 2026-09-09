@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { Bug, Trophy, Medal, Sparkles, Radio, Tv, Award, ArrowUp, ArrowDown, ArrowLeft, Shield } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Bug, Trophy, Medal, Sparkles, Radio, Tv, Award, ArrowUp, ArrowDown, ArrowLeft, Shield, Play, Volume2, VolumeX, ArrowRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { api } from '../services/api';
-import { subscribeToLeaderboard, subscribeToState, subscribeToWinnerReveal, subscribeToSubmission } from '../services/socket';
+import { subscribeToLeaderboard, subscribeToState, subscribeToWinnerReveal, subscribeToSubmission, subscribeToProjectorIntro } from '../services/socket';
 import { soundService } from '../services/sound';
 
 export default function ProjectorPage({ onBack, onOpenAdmin }) {
   const [leaderboard, setLeaderboard] = useState([]);
+  const [showIntroVideo, setShowIntroVideo] = useState(false);
+  const [videoMuted, setVideoMuted] = useState(false);
+  const videoRef = useRef(null);
   const [compState, setCompState] = useState({
     status: 'WAITING',
     active_round: 0,
@@ -80,13 +83,29 @@ export default function ProjectorPage({ onBack, onOpenAdmin }) {
       }
     });
 
+    const unsubIntro = subscribeToProjectorIntro(() => {
+      setShowIntroVideo(true);
+      setVideoMuted(false);
+    });
+
     return () => {
       unsubLb();
       unsubState();
       unsubReveal();
       unsubSub();
+      unsubIntro();
     };
   }, []);
+
+  const handleIntroEnded = () => {
+    setShowIntroVideo(false);
+    soundService.playVictory();
+    confetti({
+      particleCount: 150,
+      spread: 120,
+      origin: { y: 0.5 }
+    });
+  };
 
   const triggerRoundTransition = (roundNum) => {
     const titles = {
@@ -159,6 +178,19 @@ export default function ProjectorPage({ onBack, onOpenAdmin }) {
             <span className="w-2.5 h-2.5 rounded-full bg-cyber-green animate-ping" />
             <span className="font-bold text-slate-200 uppercase">{getRoundLabel()}</span>
           </div>
+
+          {/* Direct Launch / Play Tournament Intro Animation Button */}
+          <button
+            onClick={() => {
+              setShowIntroVideo(true);
+              setVideoMuted(false);
+            }}
+            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-mono text-xs font-bold hover:brightness-110 shadow-lg shadow-amber-500/25 flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+            title="Play Tournament Intro Animation & Reveal Live Arena"
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            <span>Play Intro Video</span>
+          </button>
 
           <div className="hidden lg:flex items-center gap-2 font-mono text-xs text-slate-500">
             <Radio className="w-4 h-4 text-cyber-cyan" />
@@ -325,6 +357,45 @@ export default function ProjectorPage({ onBack, onOpenAdmin }) {
         </div>
 
       </main>
+
+      {/* Full-Screen Cinematic Tournament Intro Video Overlay */}
+      {showIntroVideo && (
+        <div className="fixed inset-0 z-50 bg-black flex items-center justify-center animate-fade-in select-none">
+          <video
+            ref={videoRef}
+            src="/intro.mp4"
+            autoPlay
+            playsInline
+            muted={videoMuted}
+            onEnded={handleIntroEnded}
+            className="w-full h-full object-contain"
+          />
+
+          {/* Floating Operator Controls (Top-Right) */}
+          <div className="absolute top-6 right-6 flex items-center gap-3 z-50">
+            <button
+              onClick={() => setVideoMuted(!videoMuted)}
+              className="px-3.5 py-2 rounded-xl bg-black/70 backdrop-blur border border-white/20 text-white font-mono text-xs hover:bg-black/90 transition flex items-center gap-2 shadow-2xl cursor-pointer"
+            >
+              {videoMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-cyber-green" />}
+              <span>{videoMuted ? 'Unmute Audio' : 'Mute Audio'}</span>
+            </button>
+
+            <button
+              onClick={handleIntroEnded}
+              className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-mono text-xs font-bold transition flex items-center gap-1.5 shadow-2xl active:scale-95 cursor-pointer"
+            >
+              <span>Skip Intro & Reveal</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Stage Watermark Tag */}
+          <div className="absolute bottom-6 left-6 font-mono text-xs text-white/50 tracking-widest uppercase pointer-events-none drop-shadow">
+            BUG HUNT 2026 • OFFICIAL TOURNAMENT LAUNCH
+          </div>
+        </div>
+      )}
 
     </div>
   );

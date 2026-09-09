@@ -95,3 +95,10 @@ export function broadcastViolation(teamId, violationData) {
     io.to(`team_${teamId}`).emit('team:strike', violationData);
     io.to('admin_room').emit('admin:violation_alert', { teamId, ...violationData });
 }
+
+// Broadcast tournament intro video animation to projector
+export function broadcastProjectorIntro() {
+    if (!io) return;
+    io.emit('projector:play_intro', { timestamp: new Date().toISOString() });
+}
+

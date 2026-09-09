@@ -62,3 +62,10 @@ export function subscribeToSubmission(callback) {
     s.on('team:submitted', callback);
     return () => s.off('team:submitted', callback);
 }
+
+export function subscribeToProjectorIntro(callback) {
+    const s = getSocket();
+    s.on('projector:play_intro', callback);
+    return () => s.off('projector:play_intro', callback);
+}
+

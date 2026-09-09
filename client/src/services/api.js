@@ -166,6 +166,14 @@ export const api = {
         return res.json();
     },
 
+    async triggerProjectorIntro() {
+        const res = await fetch(`${API_BASE}/admin/projector/play-intro`, {
+            method: 'POST',
+            headers: this.getAdminHeaders()
+        });
+        return res.json();
+    },
+
     async lockResults() {
         const res = await fetch(`${API_BASE}/admin/results/lock`, {
             method: 'POST',

@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../database/db.js';
 import { authenticateAdmin } from '../middleware/auth.js';
-import { broadcastCompetitionState, broadcastWinnerReveal, broadcastLeaderboard } from '../services/socketManager.js';
+import { broadcastCompetitionState, broadcastWinnerReveal, broadcastLeaderboard, broadcastProjectorIntro } from '../services/socketManager.js';
 import { generateCertificatesForTeams } from '../services/certificateService.js';
 import { createRequire } from 'module';
 import { parseCSVToObjects } from '../services/csvParser.js';
@@ -328,6 +328,18 @@ router.post('/projector/reveal', (req, res) => {
     } catch (err) {
         console.error('Projector reveal error:', err);
         return res.status(500).json({ error: 'Failed to set reveal state.' });
+    }
+});
+
+// POST /api/admin/projector/play-intro - Trigger tournament intro animation on Projector display
+router.post('/projector/play-intro', (req, res) => {
+    try {
+        broadcastProjectorIntro();
+        logAdminAction(req.admin.username, 'PROJECTOR_PLAY_INTRO', 'INTRO_ANIMATION', 'Triggered tournament start animation on projector');
+        return res.json({ success: true, message: 'Tournament intro animation triggered on projector.' });
+    } catch (err) {
+        console.error('Play intro error:', err);
+        return res.status(500).json({ error: 'Failed to trigger intro animation.' });
     }
 });
 

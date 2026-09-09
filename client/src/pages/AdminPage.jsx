@@ -227,6 +227,20 @@ export default function AdminPage({ onBack, onOpenLeaderboard, onOpenProjector }
     }
   };
 
+  // Trigger Tournament Start Intro Video on Projector
+  const handleTriggerProjectorIntro = async () => {
+    soundService.playClick();
+    try {
+      const res = await api.triggerProjectorIntro();
+      if (res.success) {
+        soundService.playVictory();
+        showBanner('🎬 Tournament launch video animation triggered on Projector screen!');
+      }
+    } catch (e) {
+      alert('Failed to trigger projector intro');
+    }
+  };
+
   // Certificates Generation
   const handleGenerateCerts = async (filter = 'all') => {
     soundService.playClick();
@@ -954,6 +968,28 @@ export default function AdminPage({ onBack, onOpenLeaderboard, onOpenProjector }
                 </div>
                 <p className="text-slate-400 text-[11px]">
                   Opens the full-screen 1080p/4K read-only leaderboard designed for the auditorium stage projector or LED screen.
+                </p>
+              </div>
+
+              {/* Tournament Start Video Animation Controller */}
+              <div className="p-5 rounded-2xl border border-amber-500/40 bg-slate-900/80 space-y-3">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-amber-300">🎬 Tournament Start Video Animation</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      intro.mp4 Loaded
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleTriggerProjectorIntro}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 font-bold hover:brightness-110 shadow-lg shadow-amber-500/20 flex items-center gap-2 transition active:scale-95 cursor-pointer"
+                  >
+                    <Play className="w-4 h-4 fill-current" />
+                    <span>Play Intro on Projector</span>
+                  </button>
+                </div>
+                <p className="text-slate-400 text-[11px] leading-relaxed">
+                  Sends a real-time signal to play the full-screen cinematic intro video (<code className="text-cyber-cyan">/intro.mp4</code>) on the stage projector before unveiling the competition arena.
                 </p>
               </div>
 
