@@ -102,3 +102,9 @@ export function broadcastProjectorIntro() {
     io.emit('projector:play_intro', { timestamp: new Date().toISOString() });
 }
 
+// Broadcast projector view change ('rules' or 'scoreboard')
+export function broadcastProjectorView(view) {
+    if (!io) return;
+    io.emit('projector:set_view', { view, timestamp: new Date().toISOString() });
+}
+

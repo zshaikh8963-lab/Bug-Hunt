@@ -3,7 +3,7 @@ import {
   Shield, Lock, LogOut, Play, Pause, Square, RotateCcw, Download, 
   Users, BarChart3, HelpCircle, Clock, ArrowLeft, RefreshCw, AlertTriangle, 
   Tv, Award, Settings, CheckCircle2, XCircle, Eye, EyeOff, FileSpreadsheet,
-  AlertOctagon, Radio, FileText, Sparkles, Plus, Edit2, Trash2, Trophy
+  AlertOctagon, Radio, FileText, Sparkles, Plus, Edit2, Trash2, Trophy, BookOpen
 } from 'lucide-react';
 import { api } from '../services/api';
 import { soundService } from '../services/sound';
@@ -238,6 +238,20 @@ export default function AdminPage({ onBack, onOpenLeaderboard, onOpenProjector }
       }
     } catch (e) {
       alert('Failed to trigger projector intro');
+    }
+  };
+
+  // Switch Stage Projector View Mode (Rules vs Scoreboard)
+  const handleSetProjectorView = async (view) => {
+    soundService.playClick();
+    try {
+      const res = await api.setProjectorView(view);
+      if (res.success) {
+        soundService.playCorrect();
+        showBanner(`Stage projector view switched to ${view === 'rules' ? 'OFFICIAL RULES' : 'LIVE SCOREBOARD'}`);
+      }
+    } catch (e) {
+      alert('Failed to switch projector view');
     }
   };
 
@@ -989,8 +1003,39 @@ export default function AdminPage({ onBack, onOpenLeaderboard, onOpenProjector }
                   </button>
                 </div>
                 <p className="text-slate-400 text-[11px] leading-relaxed">
-                  Sends a real-time signal to play the full-screen cinematic intro video (<code className="text-cyber-cyan">/intro.mp4</code>) on the stage projector before unveiling the competition arena.
+                  Sends a real-time signal to play the full-screen cinematic intro video (<code className="text-cyber-cyan">/intro.mp4</code>) on the stage projector. When the video ends, it seamlessly displays the official Rules of Bug Hunt briefing.
                 </p>
+              </div>
+
+              {/* Stage Projector View Controller */}
+              <div className="p-5 rounded-2xl border border-slate-700 bg-slate-900/80 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold text-slate-200 text-sm flex items-center gap-2">
+                      <Tv className="w-4 h-4 text-cyber-cyan" />
+                      <span>Stage Projector Screen Display Mode</span>
+                    </h3>
+                    <p className="text-slate-400 text-[11px]">
+                      Switch between the Official Competition Rules and the Live Scoreboard on the auditorium screen in real-time.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleSetProjectorView('rules')}
+                      className="px-3.5 py-2 rounded-xl border border-cyber-cyan/40 bg-cyber-cyan/15 text-cyber-cyan hover:bg-cyber-cyan/25 font-mono text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>📋 Show Rules on Projector</span>
+                    </button>
+                    <button
+                      onClick={() => handleSetProjectorView('scoreboard')}
+                      className="px-3.5 py-2 rounded-xl border border-cyber-green/40 bg-cyber-green/15 text-cyber-green hover:bg-cyber-green/25 font-mono text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+                    >
+                      <Trophy className="w-3.5 h-3.5" />
+                      <span>📊 Show Scoreboard</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Sequential Winner Reveal Steps */}

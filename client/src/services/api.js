@@ -174,6 +174,15 @@ export const api = {
         return res.json();
     },
 
+    async setProjectorView(view) {
+        const res = await fetch(`${API_BASE}/admin/projector/view`, {
+            method: 'POST',
+            headers: this.getAdminHeaders(),
+            body: JSON.stringify({ view })
+        });
+        return res.json();
+    },
+
     async lockResults() {
         const res = await fetch(`${API_BASE}/admin/results/lock`, {
             method: 'POST',
@@ -268,6 +277,14 @@ export const api = {
 
     async reseedQuestionBank() {
         const res = await fetch(`${API_BASE}/admin/questions/reseed`, {
+            method: 'POST',
+            headers: this.getAdminHeaders()
+        });
+        return res.json();
+    },
+
+    async clearQuestionBank() {
+        const res = await fetch(`${API_BASE}/admin/questions/clear-all`, {
             method: 'POST',
             headers: this.getAdminHeaders()
         });

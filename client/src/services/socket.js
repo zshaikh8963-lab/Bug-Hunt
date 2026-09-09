@@ -69,3 +69,9 @@ export function subscribeToProjectorIntro(callback) {
     return () => s.off('projector:play_intro', callback);
 }
 
+export function subscribeToProjectorView(callback) {
+    const s = getSocket();
+    s.on('projector:set_view', callback);
+    return () => s.off('projector:set_view', callback);
+}
+

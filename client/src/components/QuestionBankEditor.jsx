@@ -277,10 +277,12 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
 
   const [reseeding, setReseeding] = useState(false);
 
-  // Force Reload Official Tournament Questions
+  const [clearing, setClearing] = useState(false);
+
+  // Force Reload Official Tournament Questions (25 R1 MCQs, 10 R2 Java, 4 R3 Python)
   const handleReseedQuestions = async () => {
     soundService.playClick();
-    if (!window.confirm('Reload official tournament questions for all 3 rounds? This will populate the 50 Round 1 MCQs, Java challenges, and Python challenges.')) {
+    if (!window.confirm('Load official tournament questions for all 3 rounds? This will populate the 25 Round 1 MCQs, 10 Round 2 Java challenges, and 4 Round 3 Python challenges.')) {
       return;
     }
     setReseeding(true);
@@ -288,7 +290,7 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
       const res = await api.reseedQuestionBank();
       if (res.success) {
         soundService.playVictory();
-        showBanner?.(res.message || 'Official questions loaded successfully!');
+        showBanner?.(res.message || 'Official tournament questions loaded successfully!');
         onRefresh?.();
       } else {
         soundService.playWrong();
@@ -299,6 +301,29 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
       alert('Error reloading questions: ' + err.message);
     } finally {
       setReseeding(false);
+    }
+  };
+
+  // Clear all questions from database
+  const handleClearAllQuestions = async () => {
+    soundService.playClick();
+    if (!window.confirm('Are you sure you want to empty the question bank? No questions will be shown until you click "Reload Official Questions".')) {
+      return;
+    }
+    setClearing(true);
+    try {
+      const res = await api.clearQuestionBank();
+      if (res.success) {
+        soundService.playCorrect();
+        showBanner?.(res.message || 'All questions cleared.');
+        onRefresh?.();
+      } else {
+        alert(res.error || 'Failed to clear questions.');
+      }
+    } catch (err) {
+      alert('Error clearing questions: ' + err.message);
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -459,6 +484,16 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
           >
             <Sparkles className="w-4 h-4 text-amber-400" />
             <span>{reseeding ? 'Reloading...' : 'Reload Official Questions'}</span>
+          </button>
+
+          <button
+            onClick={handleClearAllQuestions}
+            disabled={clearing}
+            className="px-3.5 py-2.5 rounded-xl border border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 font-bold transition flex items-center justify-center gap-1.5 text-xs"
+            title="Empty all question banks"
+          >
+            <Trash2 className="w-4 h-4 text-rose-400" />
+            <span>{clearing ? 'Clearing...' : 'Empty Bank'}</span>
           </button>
 
           <button
@@ -640,7 +675,7 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
                 className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyber-cyan to-cyber-green text-slate-950 font-bold hover:opacity-90 transition text-xs flex items-center gap-2 shadow-lg shadow-cyber-cyan/20"
               >
                 <Sparkles className="w-4 h-4 text-slate-950" />
-                <span>{reseeding ? 'Loading Official Questions...' : '🚀 Load 50 Official Tournament MCQs & Challenges'}</span>
+                <span>{reseeding ? 'Loading Official Questions...' : '🚀 Load Official Tournament Questions (25 R1, 10 R2, 4 R3)'}</span>
               </button>
               <button
                 onClick={() => { soundService.playClick(); setCsvModalOpen(true); setCsvError(''); }}

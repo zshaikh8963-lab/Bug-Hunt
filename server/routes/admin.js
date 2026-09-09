@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../database/db.js';
 import { authenticateAdmin } from '../middleware/auth.js';
-import { broadcastCompetitionState, broadcastWinnerReveal, broadcastLeaderboard, broadcastProjectorIntro } from '../services/socketManager.js';
+import { broadcastCompetitionState, broadcastWinnerReveal, broadcastLeaderboard, broadcastProjectorIntro, broadcastProjectorView } from '../services/socketManager.js';
 import { generateCertificatesForTeams } from '../services/certificateService.js';
 import { createRequire } from 'module';
 import { parseCSVToObjects } from '../services/csvParser.js';
@@ -340,6 +340,22 @@ router.post('/projector/play-intro', (req, res) => {
     } catch (err) {
         console.error('Play intro error:', err);
         return res.status(500).json({ error: 'Failed to trigger intro animation.' });
+    }
+});
+
+// POST /api/admin/projector/view - Set Projector view mode (rules or scoreboard)
+router.post('/projector/view', (req, res) => {
+    try {
+        const { view } = req.body;
+        if (!['rules', 'scoreboard'].includes(view)) {
+            return res.status(400).json({ error: 'Invalid view mode. Must be rules or scoreboard.' });
+        }
+        broadcastProjectorView(view);
+        logAdminAction(req.admin.username, 'PROJECTOR_SET_VIEW', 'PROJECTOR', `Switched projector view to ${view}`);
+        return res.json({ success: true, message: `Projector view set to ${view}` });
+    } catch (err) {
+        console.error('Projector set view error:', err);
+        return res.status(500).json({ error: 'Failed to set projector view.' });
     }
 });
 
@@ -832,6 +848,25 @@ router.post('/questions/import-csv', (req, res) => {
     } catch (err) {
         console.error('CSV import error:', err);
         return res.status(500).json({ error: 'Failed to import CSV: ' + err.message });
+    }
+});
+
+// POST /api/admin/questions/clear-all - Empty all question banks
+router.post('/questions/clear-all', (req, res) => {
+    try {
+        db.prepare('DELETE FROM mcq_questions').run();
+        db.prepare('DELETE FROM java_challenges').run();
+        db.prepare('DELETE FROM python_challenges').run();
+        db.prepare('DELETE FROM round_assignments').run();
+
+        logAdminAction(req.admin.username, 'CLEAR_QUESTION_BANK', 'QUESTIONS', 'Emptied all question banks');
+        return res.json({
+            success: true,
+            message: 'Question bank emptied successfully. No questions are currently in the tournament database.'
+        });
+    } catch (err) {
+        console.error('Clear questions error:', err);
+        return res.status(500).json({ error: 'Failed to clear questions: ' + err.message });
     }
 });
 
