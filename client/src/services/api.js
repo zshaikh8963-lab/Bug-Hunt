@@ -215,6 +215,40 @@ export const api = {
         return res.json();
     },
 
+    async createQuestion(round, data) {
+        const res = await fetch(`${API_BASE}/admin/questions/${round}`, {
+            method: 'POST',
+            headers: this.getAdminHeaders(),
+            body: JSON.stringify(data)
+        });
+        return res.json();
+    },
+
+    async updateQuestion(round, id, data) {
+        const res = await fetch(`${API_BASE}/admin/questions/${round}/${id}`, {
+            method: 'PUT',
+            headers: this.getAdminHeaders(),
+            body: JSON.stringify(data)
+        });
+        return res.json();
+    },
+
+    async deleteQuestion(round, id) {
+        const res = await fetch(`${API_BASE}/admin/questions/${round}/${id}`, {
+            method: 'DELETE',
+            headers: this.getAdminHeaders()
+        });
+        return res.json();
+    },
+
+    async toggleQuestionStatus(round, id) {
+        const res = await fetch(`${API_BASE}/admin/questions/${round}/${id}/toggle`, {
+            method: 'PATCH',
+            headers: this.getAdminHeaders()
+        });
+        return res.json();
+    },
+
     async changeAdminPassword(data) {
         const res = await fetch(`${API_BASE}/admin/change-password`, {
             method: 'POST',
@@ -224,3 +258,4 @@ export const api = {
         return res.json();
     }
 };
+

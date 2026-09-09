@@ -8,6 +8,7 @@ import {
 import { api } from '../services/api';
 import { soundService } from '../services/sound';
 import CertificateModal from '../components/CertificateModal';
+import QuestionBankEditor from '../components/QuestionBankEditor';
 
 export default function AdminPage({ onBack, onOpenLeaderboard, onOpenProjector }) {
   const [token, setToken] = useState(() => {
@@ -856,70 +857,13 @@ export default function AdminPage({ onBack, onOpenLeaderboard, onOpenProjector }
             </div>
           )}
 
-          {/* TAB 4: QUESTION BANK */}
+          {/* TAB 4: QUESTION BANK STUDIO */}
           {tab === 'questions' && (
-            <div className="space-y-4 font-mono text-xs">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-slate-100">
-                  Question Bank Pool
-                </h2>
-                <span className="text-slate-400">
-                  R1: {questionsBank.r1?.length || 0} MCQs • R2: {questionsBank.r2?.length || 0} Java • R3: {questionsBank.r3?.length || 0} Python
-                </span>
-              </div>
-
-              <div className="space-y-6">
-                
-                {/* R1 Section */}
-                <div className="p-4 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-2">
-                  <h3 className="font-bold text-cyber-cyan text-sm">Round 1: Basic MCQs ({questionsBank.r1?.length})</h3>
-                  <div className="max-h-60 overflow-y-auto space-y-1.5 pr-2">
-                    {questionsBank.r1?.map(q => (
-                      <div key={q.id} className="p-2 rounded-lg bg-slate-950 border border-slate-800/80 flex items-center justify-between">
-                        <div>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyber-cyan/15 text-cyber-cyan mr-2">{q.language}</span>
-                          <span className="font-bold text-slate-200">{q.title}</span>
-                        </div>
-                        <span className="text-[10px] text-slate-500">Correct: Option {String.fromCharCode(65 + q.correct_option_index)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* R2 Section */}
-                <div className="p-4 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-2">
-                  <h3 className="font-bold text-amber-400 text-sm">Round 2: Java Bug Challenges ({questionsBank.r2?.length})</h3>
-                  <div className="max-h-60 overflow-y-auto space-y-1.5 pr-2">
-                    {questionsBank.r2?.map(j => (
-                      <div key={j.id} className="p-2 rounded-lg bg-slate-950 border border-slate-800/80 flex items-center justify-between">
-                        <div>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 mr-2">{j.challenge_code}</span>
-                          <span className="font-bold text-slate-200">{j.title}</span>
-                        </div>
-                        <span className="text-[10px] text-slate-400">Line {j.buggy_line} • {j.bug_type}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* R3 Section */}
-                <div className="p-4 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-2">
-                  <h3 className="font-bold text-cyber-green text-sm">Round 3: Python Challenges ({questionsBank.r3?.length})</h3>
-                  <div className="max-h-60 overflow-y-auto space-y-1.5 pr-2">
-                    {questionsBank.r3?.map(p => (
-                      <div key={p.id} className="p-2 rounded-lg bg-slate-950 border border-slate-800/80 flex items-center justify-between">
-                        <div>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyber-green/15 text-cyber-green mr-2">{p.challenge_code}</span>
-                          <span className="font-bold text-slate-200">{p.title}</span>
-                        </div>
-                        <span className="text-[10px] text-slate-400">Line {p.faulty_line} • {p.visible_tests?.length} visible / {p.hidden_tests?.length} hidden</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-              </div>
-            </div>
+            <QuestionBankEditor
+              questionsBank={questionsBank}
+              onRefresh={loadAllAdminData}
+              showBanner={showBanner}
+            />
           )}
 
           {/* TAB 5: LIVE MONITOR */}

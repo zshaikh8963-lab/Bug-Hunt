@@ -565,6 +565,12 @@ router.post('/change-password', (req, res) => {
         const newHash = bcrypt.hashSync(new_password.trim(), salt);
         const updatedUsername = (new_username && new_username.trim()) ? new_username.trim() : admin.username;
 
+        if (updatedUsername === 'admin' && admin.username !== 'admin') {
+            try {
+                db.prepare("DELETE FROM admin_users WHERE username = 'admin' AND id != ?").run(admin.id);
+            } catch (e) {}
+        }
+
         db.prepare('UPDATE admin_users SET username = ?, password_hash = ? WHERE id = ?').run(updatedUsername, newHash, admin.id);
 
         // Keep master fallback 'admin' account updated with same password so organizer is never locked out
@@ -621,6 +627,555 @@ router.get('/questions-bank', (req, res) => {
     } catch (err) {
         console.error('Question bank error:', err);
         return res.status(500).json({ error: 'Failed to retrieve question bank.' });
+    }
+});
+
+// ==========================================
+// QUESTION BANK CRUD ENDPOINTS
+// ==========================================
+
+// --- ROUND 1: MCQs ---
+// POST /api/admin/questions/r1
+router.post('/questions/r1', (req, res) => {
+    try {
+        const {
+            language = 'C',
+            difficulty = 'Easy',
+            title,
+            question_text,
+            code_snippet = '',
+            options = [],
+            correct_option_index = 0,
+            explanation = '',
+            is_active = 1
+        } = req.body;
+
+        if (!title || !question_text) {
+            return res.status(400).json({ error: 'Question title and text are required.' });
+        }
+
+        const optionsArray = Array.isArray(options) ? options : [
+            req.body.optA || '', req.body.optB || '', req.body.optC || '', req.body.optD || ''
+        ];
+
+        if (optionsArray.length < 2) {
+            return res.status(400).json({ error: 'At least two options are required.' });
+        }
+
+        const info = db.prepare(`
+            INSERT INTO mcq_questions (language, difficulty, title, question_text, code_snippet, options_json, correct_option_index, explanation, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            language,
+            difficulty,
+            title.trim(),
+            question_text.trim(),
+            code_snippet || '',
+            JSON.stringify(optionsArray),
+            parseInt(correct_option_index, 10) || 0,
+            explanation || '',
+            is_active ? 1 : 0
+        );
+
+        const newQuestion = db.prepare('SELECT * FROM mcq_questions WHERE id = ?').get(info.lastInsertRowid);
+        logAdminAction(req.admin.username, 'CREATE_R1_MCQ', `MCQ #${info.lastInsertRowid}`, `Created ${language} MCQ: ${title}`);
+
+        return res.json({
+            success: true,
+            message: 'Round 1 MCQ created successfully.',
+            question: {
+                ...newQuestion,
+                options: optionsArray
+            }
+        });
+    } catch (err) {
+        console.error('Create R1 MCQ error:', err);
+        return res.status(500).json({ error: 'Failed to create Round 1 MCQ: ' + err.message });
+    }
+});
+
+// PUT /api/admin/questions/r1/:id
+router.put('/questions/r1/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const existing = db.prepare('SELECT * FROM mcq_questions WHERE id = ?').get(id);
+        if (!existing) {
+            return res.status(404).json({ error: 'Round 1 MCQ not found.' });
+        }
+
+        const {
+            language = existing.language,
+            difficulty = existing.difficulty,
+            title = existing.title,
+            question_text = existing.question_text,
+            code_snippet = existing.code_snippet,
+            options,
+            correct_option_index = existing.correct_option_index,
+            explanation = existing.explanation,
+            is_active = existing.is_active
+        } = req.body;
+
+        const optionsJson = options ? JSON.stringify(options) : existing.options_json;
+
+        db.prepare(`
+            UPDATE mcq_questions SET
+                language = ?,
+                difficulty = ?,
+                title = ?,
+                question_text = ?,
+                code_snippet = ?,
+                options_json = ?,
+                correct_option_index = ?,
+                explanation = ?,
+                is_active = ?
+            WHERE id = ?
+        `).run(
+            language,
+            difficulty,
+            title.trim(),
+            question_text.trim(),
+            code_snippet || '',
+            optionsJson,
+            parseInt(correct_option_index, 10),
+            explanation || '',
+            is_active ? 1 : 0,
+            id
+        );
+
+        const updated = db.prepare('SELECT * FROM mcq_questions WHERE id = ?').get(id);
+        logAdminAction(req.admin.username, 'UPDATE_R1_MCQ', `MCQ #${id}`, `Updated ${language} MCQ: ${title}`);
+
+        let parsedOptions = [];
+        try { parsedOptions = JSON.parse(updated.options_json); } catch (e) { parsedOptions = []; }
+
+        return res.json({
+            success: true,
+            message: 'Round 1 MCQ updated successfully.',
+            question: { ...updated, options: parsedOptions }
+        });
+    } catch (err) {
+        console.error('Update R1 MCQ error:', err);
+        return res.status(500).json({ error: 'Failed to update Round 1 MCQ: ' + err.message });
+    }
+});
+
+// DELETE /api/admin/questions/r1/:id
+router.delete('/questions/r1/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const existing = db.prepare('SELECT * FROM mcq_questions WHERE id = ?').get(id);
+        if (!existing) {
+            return res.status(404).json({ error: 'Round 1 MCQ not found.' });
+        }
+
+        db.prepare('DELETE FROM mcq_questions WHERE id = ?').run(id);
+        logAdminAction(req.admin.username, 'DELETE_R1_MCQ', `MCQ #${id}`, `Deleted MCQ: ${existing.title}`);
+
+        return res.json({
+            success: true,
+            message: `Round 1 MCQ #${id} deleted successfully.`
+        });
+    } catch (err) {
+        console.error('Delete R1 MCQ error:', err);
+        return res.status(500).json({ error: 'Failed to delete Round 1 MCQ.' });
+    }
+});
+
+// PATCH /api/admin/questions/r1/:id/toggle
+router.patch('/questions/r1/:id/toggle', (req, res) => {
+    try {
+        const { id } = req.params;
+        const existing = db.prepare('SELECT * FROM mcq_questions WHERE id = ?').get(id);
+        if (!existing) {
+            return res.status(404).json({ error: 'Round 1 MCQ not found.' });
+        }
+
+        const newStatus = existing.is_active ? 0 : 1;
+        db.prepare('UPDATE mcq_questions SET is_active = ? WHERE id = ?').run(newStatus, id);
+        logAdminAction(req.admin.username, 'TOGGLE_R1_MCQ', `MCQ #${id}`, `Status changed to ${newStatus ? 'ACTIVE' : 'INACTIVE'}`);
+
+        return res.json({
+            success: true,
+            is_active: newStatus,
+            message: `Round 1 MCQ #${id} is now ${newStatus ? 'Active' : 'Inactive'}.`
+        });
+    } catch (err) {
+        console.error('Toggle R1 MCQ error:', err);
+        return res.status(500).json({ error: 'Failed to toggle status.' });
+    }
+});
+
+
+// --- ROUND 2: JAVA BUG IDENTIFICATION CHALLENGES ---
+// POST /api/admin/questions/r2
+router.post('/questions/r2', (req, res) => {
+    try {
+        let {
+            challenge_code,
+            title,
+            description,
+            code_snippet,
+            buggy_line,
+            bug_type,
+            explanation = '',
+            is_active = 1
+        } = req.body;
+
+        if (!title || !description || !code_snippet) {
+            return res.status(400).json({ error: 'Title, description, and code snippet are required.' });
+        }
+
+        if (!challenge_code || !challenge_code.trim()) {
+            const count = db.prepare('SELECT COUNT(*) as c FROM java_challenges').get().c;
+            challenge_code = `JAVA-${String(count + 1).padStart(3, '0')}`;
+        }
+
+        const info = db.prepare(`
+            INSERT INTO java_challenges (challenge_code, title, description, code_snippet, buggy_line, bug_type, explanation, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            challenge_code.trim(),
+            title.trim(),
+            description.trim(),
+            code_snippet,
+            parseInt(buggy_line, 10) || 1,
+            (bug_type || 'Logical Error').trim(),
+            explanation || '',
+            is_active ? 1 : 0
+        );
+
+        const newChallenge = db.prepare('SELECT * FROM java_challenges WHERE id = ?').get(info.lastInsertRowid);
+        logAdminAction(req.admin.username, 'CREATE_R2_CHALLENGE', challenge_code, `Created Java challenge: ${title}`);
+
+        return res.json({
+            success: true,
+            message: 'Round 2 Java Challenge created successfully.',
+            challenge: newChallenge
+        });
+    } catch (err) {
+        console.error('Create R2 Challenge error:', err);
+        return res.status(500).json({ error: 'Failed to create Round 2 Challenge: ' + err.message });
+    }
+});
+
+// PUT /api/admin/questions/r2/:id
+router.put('/questions/r2/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const existing = db.prepare('SELECT * FROM java_challenges WHERE id = ?').get(id);
+        if (!existing) {
+            return res.status(404).json({ error: 'Round 2 Challenge not found.' });
+        }
+
+        const {
+            challenge_code = existing.challenge_code,
+            title = existing.title,
+            description = existing.description,
+            code_snippet = existing.code_snippet,
+            buggy_line = existing.buggy_line,
+            bug_type = existing.bug_type,
+            explanation = existing.explanation,
+            is_active = existing.is_active
+        } = req.body;
+
+        db.prepare(`
+            UPDATE java_challenges SET
+                challenge_code = ?,
+                title = ?,
+                description = ?,
+                code_snippet = ?,
+                buggy_line = ?,
+                bug_type = ?,
+                explanation = ?,
+                is_active = ?
+            WHERE id = ?
+        `).run(
+            challenge_code.trim(),
+            title.trim(),
+            description.trim(),
+            code_snippet,
+            parseInt(buggy_line, 10),
+            (bug_type || 'Logical Error').trim(),
+            explanation || '',
+            is_active ? 1 : 0,
+            id
+        );
+
+        const updated = db.prepare('SELECT * FROM java_challenges WHERE id = ?').get(id);
+        logAdminAction(req.admin.username, 'UPDATE_R2_CHALLENGE', challenge_code, `Updated Java challenge: ${title}`);
+
+        return res.json({
+            success: true,
+            message: 'Round 2 Java Challenge updated successfully.',
+            challenge: updated
+        });
+    } catch (err) {
+        console.error('Update R2 Challenge error:', err);
+        return res.status(500).json({ error: 'Failed to update Round 2 Challenge: ' + err.message });
+    }
+});
+
+// DELETE /api/admin/questions/r2/:id
+router.delete('/questions/r2/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const existing = db.prepare('SELECT * FROM java_challenges WHERE id = ?').get(id);
+        if (!existing) {
+            return res.status(404).json({ error: 'Round 2 Challenge not found.' });
+        }
+
+        db.prepare('DELETE FROM java_challenges WHERE id = ?').run(id);
+        logAdminAction(req.admin.username, 'DELETE_R2_CHALLENGE', existing.challenge_code, `Deleted Java Challenge: ${existing.title}`);
+
+        return res.json({
+            success: true,
+            message: `Round 2 Challenge #${id} deleted successfully.`
+        });
+    } catch (err) {
+        console.error('Delete R2 Challenge error:', err);
+        return res.status(500).json({ error: 'Failed to delete Round 2 Challenge.' });
+    }
+});
+
+// PATCH /api/admin/questions/r2/:id/toggle
+router.patch('/questions/r2/:id/toggle', (req, res) => {
+    try {
+        const { id } = req.params;
+        const existing = db.prepare('SELECT * FROM java_challenges WHERE id = ?').get(id);
+        if (!existing) {
+            return res.status(404).json({ error: 'Round 2 Challenge not found.' });
+        }
+
+        const newStatus = existing.is_active ? 0 : 1;
+        db.prepare('UPDATE java_challenges SET is_active = ? WHERE id = ?').run(newStatus, id);
+        logAdminAction(req.admin.username, 'TOGGLE_R2_CHALLENGE', existing.challenge_code, `Status changed to ${newStatus ? 'ACTIVE' : 'INACTIVE'}`);
+
+        return res.json({
+            success: true,
+            is_active: newStatus,
+            message: `Round 2 Challenge ${existing.challenge_code} is now ${newStatus ? 'Active' : 'Inactive'}.`
+        });
+    } catch (err) {
+        console.error('Toggle R2 Challenge error:', err);
+        return res.status(500).json({ error: 'Failed to toggle status.' });
+    }
+});
+
+
+// --- ROUND 3: PYTHON DEBUG & SOLVE CHALLENGES ---
+// POST /api/admin/questions/r3
+router.post('/questions/r3', (req, res) => {
+    try {
+        let {
+            challenge_code,
+            title,
+            description,
+            expected_behavior = '',
+            input_format = '',
+            output_format = '',
+            constraints = '',
+            buggy_code,
+            canonical_solution = '',
+            faulty_line = 1,
+            bug_type = 'Logical Error',
+            visible_tests = [],
+            hidden_tests = [],
+            is_active = 1
+        } = req.body;
+
+        if (!title || !description || !buggy_code) {
+            return res.status(400).json({ error: 'Title, description, and buggy code are required.' });
+        }
+
+        if (!challenge_code || !challenge_code.trim()) {
+            const count = db.prepare('SELECT COUNT(*) as c FROM python_challenges').get().c;
+            challenge_code = `PY-${String(count + 1).padStart(3, '0')}`;
+        }
+
+        const visibleJson = typeof visible_tests === 'string' ? visible_tests : JSON.stringify(visible_tests);
+        const hiddenJson = typeof hidden_tests === 'string' ? hidden_tests : JSON.stringify(hidden_tests);
+
+        const info = db.prepare(`
+            INSERT INTO python_challenges (
+                challenge_code, title, description, expected_behavior, input_format, output_format,
+                constraints, buggy_code, canonical_solution, faulty_line, bug_type,
+                visible_tests_json, hidden_tests_json, is_active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            challenge_code.trim(),
+            title.trim(),
+            description.trim(),
+            expected_behavior || '',
+            input_format || '',
+            output_format || '',
+            constraints || '',
+            buggy_code,
+            canonical_solution || buggy_code,
+            parseInt(faulty_line, 10) || 1,
+            (bug_type || 'Logical Error').trim(),
+            visibleJson,
+            hiddenJson,
+            is_active ? 1 : 0
+        );
+
+        const newChallenge = db.prepare('SELECT * FROM python_challenges WHERE id = ?').get(info.lastInsertRowid);
+        logAdminAction(req.admin.username, 'CREATE_R3_CHALLENGE', challenge_code, `Created Python challenge: ${title}`);
+
+        let vTests = [];
+        let hTests = [];
+        try { vTests = JSON.parse(newChallenge.visible_tests_json); } catch (e) { vTests = []; }
+        try { hTests = JSON.parse(newChallenge.hidden_tests_json); } catch (e) { hTests = []; }
+
+        return res.json({
+            success: true,
+            message: 'Round 3 Python Challenge created successfully.',
+            challenge: {
+                ...newChallenge,
+                visible_tests: vTests,
+                hidden_tests: hTests
+            }
+        });
+    } catch (err) {
+        console.error('Create R3 Challenge error:', err);
+        return res.status(500).json({ error: 'Failed to create Round 3 Challenge: ' + err.message });
+    }
+});
+
+// PUT /api/admin/questions/r3/:id
+router.put('/questions/r3/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const existing = db.prepare('SELECT * FROM python_challenges WHERE id = ?').get(id);
+        if (!existing) {
+            return res.status(404).json({ error: 'Round 3 Challenge not found.' });
+        }
+
+        const {
+            challenge_code = existing.challenge_code,
+            title = existing.title,
+            description = existing.description,
+            expected_behavior = existing.expected_behavior,
+            input_format = existing.input_format,
+            output_format = existing.output_format,
+            constraints = existing.constraints,
+            buggy_code = existing.buggy_code,
+            canonical_solution = existing.canonical_solution,
+            faulty_line = existing.faulty_line,
+            bug_type = existing.bug_type,
+            visible_tests,
+            hidden_tests,
+            is_active = existing.is_active
+        } = req.body;
+
+        const visibleJson = visible_tests !== undefined
+            ? (typeof visible_tests === 'string' ? visible_tests : JSON.stringify(visible_tests))
+            : existing.visible_tests_json;
+
+        const hiddenJson = hidden_tests !== undefined
+            ? (typeof hidden_tests === 'string' ? hidden_tests : JSON.stringify(hidden_tests))
+            : existing.hidden_tests_json;
+
+        db.prepare(`
+            UPDATE python_challenges SET
+                challenge_code = ?,
+                title = ?,
+                description = ?,
+                expected_behavior = ?,
+                input_format = ?,
+                output_format = ?,
+                constraints = ?,
+                buggy_code = ?,
+                canonical_solution = ?,
+                faulty_line = ?,
+                bug_type = ?,
+                visible_tests_json = ?,
+                hidden_tests_json = ?,
+                is_active = ?
+            WHERE id = ?
+        `).run(
+            challenge_code.trim(),
+            title.trim(),
+            description.trim(),
+            expected_behavior || '',
+            input_format || '',
+            output_format || '',
+            constraints || '',
+            buggy_code,
+            canonical_solution || buggy_code,
+            parseInt(faulty_line, 10),
+            (bug_type || 'Logical Error').trim(),
+            visibleJson,
+            hiddenJson,
+            is_active ? 1 : 0,
+            id
+        );
+
+        const updated = db.prepare('SELECT * FROM python_challenges WHERE id = ?').get(id);
+        logAdminAction(req.admin.username, 'UPDATE_R3_CHALLENGE', challenge_code, `Updated Python challenge: ${title}`);
+
+        let vTests = [];
+        let hTests = [];
+        try { vTests = JSON.parse(updated.visible_tests_json); } catch (e) { vTests = []; }
+        try { hTests = JSON.parse(updated.hidden_tests_json); } catch (e) { hTests = []; }
+
+        return res.json({
+            success: true,
+            message: 'Round 3 Python Challenge updated successfully.',
+            challenge: {
+                ...updated,
+                visible_tests: vTests,
+                hidden_tests: hTests
+            }
+        });
+    } catch (err) {
+        console.error('Update R3 Challenge error:', err);
+        return res.status(500).json({ error: 'Failed to update Round 3 Challenge: ' + err.message });
+    }
+});
+
+// DELETE /api/admin/questions/r3/:id
+router.delete('/questions/r3/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const existing = db.prepare('SELECT * FROM python_challenges WHERE id = ?').get(id);
+        if (!existing) {
+            return res.status(404).json({ error: 'Round 3 Challenge not found.' });
+        }
+
+        db.prepare('DELETE FROM python_challenges WHERE id = ?').run(id);
+        logAdminAction(req.admin.username, 'DELETE_R3_CHALLENGE', existing.challenge_code, `Deleted Python Challenge: ${existing.title}`);
+
+        return res.json({
+            success: true,
+            message: `Round 3 Challenge #${id} deleted successfully.`
+        });
+    } catch (err) {
+        console.error('Delete R3 Challenge error:', err);
+        return res.status(500).json({ error: 'Failed to delete Round 3 Challenge.' });
+    }
+});
+
+// PATCH /api/admin/questions/r3/:id/toggle
+router.patch('/questions/r3/:id/toggle', (req, res) => {
+    try {
+        const { id } = req.params;
+        const existing = db.prepare('SELECT * FROM python_challenges WHERE id = ?').get(id);
+        if (!existing) {
+            return res.status(404).json({ error: 'Round 3 Challenge not found.' });
+        }
+
+        const newStatus = existing.is_active ? 0 : 1;
+        db.prepare('UPDATE python_challenges SET is_active = ? WHERE id = ?').run(newStatus, id);
+        logAdminAction(req.admin.username, 'TOGGLE_R3_CHALLENGE', existing.challenge_code, `Status changed to ${newStatus ? 'ACTIVE' : 'INACTIVE'}`);
+
+        return res.json({
+            success: true,
+            is_active: newStatus,
+            message: `Round 3 Challenge ${existing.challenge_code} is now ${newStatus ? 'Active' : 'Inactive'}.`
+        });
+    } catch (err) {
+        console.error('Toggle R3 Challenge error:', err);
+        return res.status(500).json({ error: 'Failed to toggle status.' });
     }
 });
 
