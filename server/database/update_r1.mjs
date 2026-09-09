@@ -3,8 +3,9 @@ import { r1Questions } from './questions_r1.js';
 
 console.log('Updating Round 1 Question Bank...');
 
-// Clear existing Round 1 MCQs
+// Clear existing Round 1 MCQs and stale assignments
 db.prepare('DELETE FROM mcq_questions').run();
+db.prepare('DELETE FROM round_assignments WHERE round_num = 1').run();
 
 // Insert all 50 questions
 const insertMcq = db.prepare(`

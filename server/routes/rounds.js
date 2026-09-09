@@ -137,6 +137,20 @@ router.get('/current', (req, res) => {
                     selected.push(...pool.map(p => p.id));
                 }
 
+                // If fewer than 10 collected from language quotas, backfill with any remaining active MCQs
+                if (selected.length < 10) {
+                    const existingSet = new Set(selected);
+                    const remaining = db.prepare(`
+                        SELECT id FROM mcq_questions 
+                        WHERE is_active = 1 
+                        ORDER BY RANDOM()
+                    `).all().filter(q => !existingSet.has(q.id));
+                    for (const q of remaining) {
+                        if (selected.length >= 10) break;
+                        selected.push(q.id);
+                    }
+                }
+
                 // Shuffle order of the 10 questions
                 questionIds = selected.sort(() => Math.random() - 0.5);
 
