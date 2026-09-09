@@ -7,7 +7,7 @@ console.log('Updating Round 1 Question Bank...');
 db.prepare('DELETE FROM mcq_questions').run();
 db.prepare('DELETE FROM round_assignments WHERE round_num = 1').run();
 
-// Insert all 50 questions
+// Insert all 25 official organizer questions
 const insertMcq = db.prepare(`
     INSERT INTO mcq_questions (language, difficulty, title, question_text, code_snippet, options_json, correct_option_index, explanation, is_active)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)

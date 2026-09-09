@@ -1,11 +1,26 @@
 language,difficulty,title,question_text,code_snippet,option_a,option_b,option_c,option_d,correct_option,explanation
-C,Easy,Post-Increment Output,What is the output of the following C code?,"int x = 5;\nprintf(""%d"", x++);",4,5,6,Error,B,"x++ evaluates to 5 before incrementing."
-C,Easy,Standard I/O Header,Which header file is required for printf()?,stdlib.h,string.h,stdio.h,math.h,C,"stdio.h contains declaration for printf()."
-C++,Easy,Standard Output Stream,Which stream is commonly used for output in C++?,cin,cout,print,output,B,"std::cout is the standard output stream."
-C++,Easy,Stream Insertion Operator,Which operator is used with cout?,>>,<<,<>,&&,B,"<< is the insertion operator."
-Java,Easy,Object Instantiation Keyword,Which keyword is used to create an object in Java?,create,object,new,malloc,C,"The new operator instantiates a class."
-Java,Easy,Application Entry Point,Which method is the entry point of a standard Java application?,start(),run(),main(),execute(),C,"main() is the standard entry point method."
-Python,Easy,Single-Line Comment Symbol,Which symbol is used for a single-line comment in Python?,//,#,/*,--,B,"Python uses # for single-line comments."
-Python,Easy,Output Display Function,Which function is used to display output?,display(),echo(),print(),printf(),C,"print() is the standard output function."
-HTML,Easy,HTML Full Form,What does HTML stand for?,Hyper Text Markup Language,High Text Machine Language,Hyperlink Text Management Language,Home Tool Markup Language,A,"HTML stands for HyperText Markup Language."
-HTML,Easy,Largest Heading Tag,Which tag is used for the largest heading?,<heading>,<h6>,<h1>,<head>,C,"<h1> specifies the highest level heading."
+C,Easy,Memory Address Operator,In C which operator is used to get the memory address of a variable?,,*,&,%,#,B,The address-of operator (&) returns the memory address.
+Python,Easy,Function Definition Keyword,Which keyword is used to define a function in Python?,,function,define,def,func,C,def is the keyword used to define functions in Python.
+Java,Easy,Object Instantiation Keyword,Which keyword is used to create an object in Java?,,class,object,new,create,C,new dynamically allocates memory for an object.
+HTML,Easy,Largest Heading Tag,Which HTML tag is used for the largest heading?,,<head>,<h6>,<heading>,<h1>,D,<h1> defines the largest heading in HTML.
+C++,Moderate,Inheritance Concept,Which feature allows a C++ class to acquire properties of another class?,,Encapsulation,Inheritance,Abstraction,Compilation,B,Inheritance allows a derived class to acquire base class properties.
+Python,Easy,Key-Value Data Structure,Which Python data type stores key-value pairs?,,List,Tuple,Dictionary,Set,C,Dictionaries store data in key-value pairs.
+HTML,Easy,Hyperlink Tag,Which HTML tag creates a hyperlink?,,<link>,<a>,<href>,<url>,B,<a> tag creates hyperlinks.
+Java,Easy,Primitive Data Type,Which of the following is a primitive data type in Java?,,String,Integer,int,Array,C,int is a built-in primitive type in Java.
+C,Moderate,Integer Division Output,What is the output of 5 / 2 in C when both operands are integers?,,2,2.5,3,1,A,Integer division truncates fractional components yielding 2.
+Python,Moderate,Negative Indexing,What is the output of Python code: a=[10 20 30]; print(a[-1])?,"a = [10, 20, 30]\nprint(a[-1])",10,20,30,Error,C,a[-1] accesses the last element (30).
+Java,Easy,Decision-Making Statement,Which statement is used for decision-making in Java?,,if,check,decide,when,A,if is the primary decision-making statement in Java.
+C++,Moderate,Post-Increment Output,What is the output of: int x=5; cout << x++; in C++?,"int x = 5;\ncout << x++;",4,5,6,Error,B,x++ outputs current value 5 before incrementing.
+HTML,Easy,Image Alternative Text,Which HTML attribute provides alternative text for an image?,,title,src,alt,href,C,alt provides alternate text if image fails to load.
+C,Easy,Standard I/O Header,Which C header file is commonly used for printf()?,,stdlib.h,string.h,math.h,stdio.h,D,stdio.h declares standard I/O functions including printf.
+Java,Moderate,Class Inheritance Keyword,Which Java keyword is used to inherit a class?,,implements,inherits,extends,super,C,extends is used for class inheritance in Java.
+Python,Easy,Floor Division Operator,What does // perform in Python?,,Normal division,Floor division,Modulus,Exponentiation,B,// performs floor division rounding down.
+C++,Easy,Member Access Operator,Which operator is used to access a member through a C++ object?,,->,::,.,&,C,The dot operator (.) accesses object members.
+Java,Hard,String Reference Comparison,What is the result of two separately created Java String objects containing 'Hello' when compared using ==?,"String s1 = new String(""Hello"");\nString s2 = new String(""Hello"");\nSystem.out.println(s1 == s2);",true,false,Hello,Compilation error,B,== compares object references which are distinct in heap.
+Python,Hard,List Reference Mutation,What is the output of: a=[1 2]; b=a; b.append(3); print(a)?,"a = [1, 2]\nb = a\nb.append(3)\nprint(a)",[1 2],[3],[1 2 3],Error,C,b=a references the same list so appending to b mutates a.
+C,Moderate,Integer Size in C,If int x=10; in a typical C implementation what is sizeof(x)?,"int x = 10;\nprintf(""%zu"", sizeof(x));",1 byte,2 bytes,4 bytes,8 bytes,C,Standard integer in typical implementations is 4 bytes.
+C,Hard,Pointer Dereferencing,What is the output of: int x=10; int *p=&x; *p=20; printf('%d' x);?,"int x = 10;\nint *p = &x;\n*p = 20;\nprintf(""%d"", x);",10,20,Address of x,Error,B,*p=20 mutates value of x at address &x to 20.
+Java,Moderate,Invalid Array Index Exception,What exception occurs when accessing an invalid index of a Java array?,,NullPointerException,ArrayIndexOutOfBoundsException,IOException,ArithmeticException,B,Invalid array index throws ArrayIndexOutOfBoundsException.
+Python,Moderate,List Slicing,What is the result of Python expression [1 2 3 4][1:3]?,,[1 2],[2 3],[2 3 4],[1 2 3],B,Slice [1:3] takes indices 1 and 2 yielding [2 3].
+Java,Moderate,Nested If Condition Flow,In Java if an outer if is false in a nested if-else statement what happens?,,Inner statement runs,Else always runs,No output,Compilation error,C,When outer if is false the inner block is bypassed completely.
+C++,Moderate,Ternary Conditional Operator,What is the value of: int x=(5>3) ? 10 : 20; in C++?,"int x = (5 > 3) ? 10 : 20;",5,10,20,Error,B,(5>3) is true so ternary expression evaluates to 10.

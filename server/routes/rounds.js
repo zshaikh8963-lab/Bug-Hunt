@@ -124,20 +124,18 @@ router.get('/current', (req, res) => {
         if (!assignment) {
             // Assign questions permanently
             if (roundNum === 1) {
-                // Exactly 10 MCQs: 2 C, 2 C++, 2 Java, 2 Python, 2 HTML
-                const langs = ['C', 'C++', 'Java', 'Python', 'HTML'];
-                const selected = [];
+                // Recommended selection: 4 Easy + 4 Moderate + 2 Hard (Total = 10 Questions)
+                const easyPool = db.prepare(`SELECT id FROM mcq_questions WHERE is_active = 1 AND difficulty = 'Easy' ORDER BY RANDOM() LIMIT 4`).all();
+                const modPool = db.prepare(`SELECT id FROM mcq_questions WHERE is_active = 1 AND difficulty = 'Moderate' ORDER BY RANDOM() LIMIT 4`).all();
+                const hardPool = db.prepare(`SELECT id FROM mcq_questions WHERE is_active = 1 AND difficulty = 'Hard' ORDER BY RANDOM() LIMIT 2`).all();
 
-                for (const lang of langs) {
-                    const pool = db.prepare(`
-                        SELECT id FROM mcq_questions 
-                        WHERE language = ? AND is_active = 1 
-                        ORDER BY RANDOM() LIMIT 2
-                    `).all(lang);
-                    selected.push(...pool.map(p => p.id));
-                }
+                const selected = [
+                    ...easyPool.map(p => p.id),
+                    ...modPool.map(p => p.id),
+                    ...hardPool.map(p => p.id)
+                ];
 
-                // If fewer than 10 collected from language quotas, backfill with any remaining active MCQs
+                // If fewer than 10 collected from difficulty buckets, backfill with any remaining active MCQs
                 if (selected.length < 10) {
                     const existingSet = new Set(selected);
                     const remaining = db.prepare(`
@@ -151,7 +149,7 @@ router.get('/current', (req, res) => {
                     }
                 }
 
-                // Shuffle order of the 10 questions
+                // Shuffle final 10 question order for each team
                 questionIds = selected.sort(() => Math.random() - 0.5);
 
             } else if (roundNum === 2) {

@@ -503,7 +503,7 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
           </div>
           <h3 className="font-bold text-sm text-slate-100 mb-1">Basic MCQs</h3>
           <p className="text-[11px] text-slate-400">
-            C, C++, Java, Python & HTML multiple-choice pool (10 assigned per team).
+            25 Official Questions pool (10 randomized per team: 4 Easy + 4 Moderate + 2 Hard).
           </p>
           {activeRound === 'r1' && (
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-cyber-cyan" />
