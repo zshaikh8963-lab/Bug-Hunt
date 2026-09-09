@@ -80,8 +80,48 @@ router.get('/current', (req, res) => {
         let questionIds = [];
 
         if (assignment) {
-            questionIds = JSON.parse(assignment.question_ids_json);
-        } else {
+            try {
+                questionIds = JSON.parse(assignment.question_ids_json);
+            } catch (e) {
+                questionIds = [];
+            }
+
+            // Verify that all assigned questions still exist in the database
+            if (roundNum === 1) {
+                const placeholders = questionIds.length > 0 ? questionIds.map(() => '?').join(',') : '0';
+                const validRows = questionIds.length > 0
+                    ? db.prepare(`SELECT id FROM mcq_questions WHERE id IN (${placeholders}) AND is_active = 1`).all(...questionIds)
+                    : [];
+                if (validRows.length < 10) {
+                    // Stale assignment with deleted/reseeded IDs! Clean up and reassign
+                    db.prepare('DELETE FROM round_assignments WHERE team_id = ? AND round_num = ?').run(team.team_id, roundNum);
+                    assignment = null;
+                    questionIds = [];
+                }
+            } else if (roundNum === 2) {
+                const placeholders = questionIds.length > 0 ? questionIds.map(() => '?').join(',') : '0';
+                const validRows = questionIds.length > 0
+                    ? db.prepare(`SELECT id FROM java_challenges WHERE id IN (${placeholders}) AND is_active = 1`).all(...questionIds)
+                    : [];
+                if (validRows.length < 3) {
+                    db.prepare('DELETE FROM round_assignments WHERE team_id = ? AND round_num = ?').run(team.team_id, roundNum);
+                    assignment = null;
+                    questionIds = [];
+                }
+            } else if (roundNum === 3) {
+                const placeholders = questionIds.length > 0 ? questionIds.map(() => '?').join(',') : '0';
+                const validRows = questionIds.length > 0
+                    ? db.prepare(`SELECT id FROM python_challenges WHERE id IN (${placeholders}) AND is_active = 1`).all(...questionIds)
+                    : [];
+                if (validRows.length < 2) {
+                    db.prepare('DELETE FROM round_assignments WHERE team_id = ? AND round_num = ?').run(team.team_id, roundNum);
+                    assignment = null;
+                    questionIds = [];
+                }
+            }
+        }
+
+        if (!assignment) {
             // Assign questions permanently
             if (roundNum === 1) {
                 // Exactly 10 MCQs: 2 C, 2 C++, 2 Java, 2 Python, 2 HTML

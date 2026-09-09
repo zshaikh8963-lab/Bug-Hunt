@@ -81,4 +81,92 @@ try {
     console.error('[DB] Admin init check error:', e);
 }
 
+// Auto-seed question banks if empty (Ensures cloud deployments like Render have questions instantly)
+try {
+    const mcqCount = db.prepare('SELECT COUNT(*) as count FROM mcq_questions').get();
+    if (mcqCount.count === 0) {
+        import('./questions_r1.js').then(({ r1Questions }) => {
+            const insertMcq = db.prepare(`
+                INSERT INTO mcq_questions (language, difficulty, title, question_text, code_snippet, options_json, correct_option_index, explanation, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+            `);
+            const insertAll = db.transaction((questions) => {
+                for (const q of questions) {
+                    insertMcq.run(
+                        q.language,
+                        q.difficulty || 'Easy',
+                        q.title,
+                        q.question_text,
+                        q.code_snippet || '',
+                        JSON.stringify(q.options),
+                        q.correct_option_index,
+                        q.explanation || ''
+                    );
+                }
+            });
+            insertAll(r1Questions);
+            console.log(`[DB] Auto-seeded ${r1Questions.length} Round 1 MCQs into database.`);
+        }).catch(err => console.error('[DB] Failed to auto-seed R1:', err));
+    }
+
+    const javaCount = db.prepare('SELECT COUNT(*) as count FROM java_challenges').get();
+    if (javaCount.count === 0) {
+        import('./questions_r2.js').then(({ r2JavaChallenges }) => {
+            const insertJava = db.prepare(`
+                INSERT INTO java_challenges (challenge_code, title, description, code_snippet, buggy_line, bug_type, explanation, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            `);
+            const insertAll = db.transaction((challenges) => {
+                for (const c of challenges) {
+                    insertJava.run(
+                        c.challenge_code,
+                        c.title,
+                        c.description,
+                        c.code_snippet,
+                        c.buggy_line,
+                        c.bug_type,
+                        c.explanation || ''
+                    );
+                }
+            });
+            insertAll(r2JavaChallenges);
+            console.log(`[DB] Auto-seeded ${r2JavaChallenges.length} Round 2 Java challenges into database.`);
+        }).catch(err => console.error('[DB] Failed to auto-seed R2:', err));
+    }
+
+    const pyCount = db.prepare('SELECT COUNT(*) as count FROM python_challenges').get();
+    if (pyCount.count === 0) {
+        import('./questions_r3.js').then(({ r3PythonChallenges }) => {
+            const insertPy = db.prepare(`
+                INSERT INTO python_challenges (challenge_code, title, description, expected_behavior, input_format, output_format, constraints, buggy_code, canonical_solution, faulty_line, bug_type, visible_tests_json, hidden_tests_json, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            `);
+            const insertAll = db.transaction((challenges) => {
+                for (const p of challenges) {
+                    insertPy.run(
+                        p.challenge_code,
+                        p.title,
+                        p.description,
+                        p.expected_behavior || '',
+                        p.input_format || '',
+                        p.output_format || '',
+                        p.constraints || '',
+                        p.buggy_code,
+                        p.canonical_solution,
+                        p.faulty_line,
+                        p.bug_type,
+                        JSON.stringify(p.visible_tests),
+                        JSON.stringify(p.hidden_tests)
+                    );
+                }
+            });
+            insertAll(r3PythonChallenges);
+            console.log(`[DB] Auto-seeded ${r3PythonChallenges.length} Round 3 Python challenges into database.`);
+        }).catch(err => console.error('[DB] Failed to auto-seed R3:', err));
+    }
+} catch (e) {
+    console.error('[DB] Auto-seed questions error:', e);
+}
+
 export default db;
+

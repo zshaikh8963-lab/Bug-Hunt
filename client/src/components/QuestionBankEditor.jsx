@@ -265,6 +265,33 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
     }
   };
 
+  const [reseeding, setReseeding] = useState(false);
+
+  // Force Reload Official Tournament Questions
+  const handleReseedQuestions = async () => {
+    soundService.playClick();
+    if (!window.confirm('Reload official tournament questions for all 3 rounds? This will populate the 50 Round 1 MCQs, Java challenges, and Python challenges.')) {
+      return;
+    }
+    setReseeding(true);
+    try {
+      const res = await api.reseedQuestionBank();
+      if (res.success) {
+        soundService.playVictory();
+        showBanner?.(res.message || 'Official questions loaded successfully!');
+        onRefresh?.();
+      } else {
+        soundService.playWrong();
+        alert(res.error || 'Failed to reload questions.');
+      }
+    } catch (err) {
+      soundService.playWrong();
+      alert('Error reloading questions: ' + err.message);
+    } finally {
+      setReseeding(false);
+    }
+  };
+
   // Delete Question
   const handleConfirmDelete = async () => {
     if (!deleteModal) return;
@@ -327,17 +354,29 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreate}
-          className="px-5 py-2.5 rounded-xl bg-cyber-cyan text-slate-950 font-bold hover:bg-cyber-cyan/90 transition shadow-lg shadow-cyber-cyan/20 flex items-center justify-center gap-2 text-xs shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>
-            {activeRound === 'r1' && 'Add New MCQ'}
-            {activeRound === 'r2' && 'Add Java Challenge'}
-            {activeRound === 'r3' && 'Add Python Challenge'}
-          </span>
-        </button>
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+          <button
+            onClick={handleReseedQuestions}
+            disabled={reseeding}
+            className="px-4 py-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold transition flex items-center justify-center gap-2 text-xs"
+            title="Reload official tournament questions for Round 1, Round 2, and Round 3"
+          >
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <span>{reseeding ? 'Reloading...' : 'Reload Official Questions'}</span>
+          </button>
+
+          <button
+            onClick={handleOpenCreate}
+            className="px-5 py-2.5 rounded-xl bg-cyber-cyan text-slate-950 font-bold hover:bg-cyber-cyan/90 transition shadow-lg shadow-cyber-cyan/20 flex items-center justify-center gap-2 text-xs shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>
+              {activeRound === 'r1' && 'Add New MCQ'}
+              {activeRound === 'r2' && 'Add Java Challenge'}
+              {activeRound === 'r3' && 'Add Python Challenge'}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Round Selection Tabs */}
@@ -489,12 +528,22 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
             <Bug className="w-10 h-10 text-slate-600 mx-auto" />
             <p className="text-sm font-bold text-slate-300">No questions found matching the selected criteria.</p>
             <p className="text-xs text-slate-500">Try adjusting your search query or create a new question.</p>
-            <button
-              onClick={handleOpenCreate}
-              className="px-4 py-2 rounded-xl bg-cyber-cyan text-slate-950 font-bold hover:bg-cyber-cyan/90 transition text-xs"
-            >
-              Create Question
-            </button>
+            <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
+              <button
+                onClick={handleReseedQuestions}
+                disabled={reseeding}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyber-cyan to-cyber-green text-slate-950 font-bold hover:opacity-90 transition text-xs flex items-center gap-2 shadow-lg shadow-cyber-cyan/20"
+              >
+                <Sparkles className="w-4 h-4 text-slate-950" />
+                <span>{reseeding ? 'Loading Official Questions...' : '🚀 Load 50 Official Tournament MCQs & Challenges'}</span>
+              </button>
+              <button
+                onClick={handleOpenCreate}
+                className="px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-200 font-bold hover:bg-slate-700 transition text-xs"
+              >
+                Create Question
+              </button>
+            </div>
           </div>
         ) : (
           currentList.map((item) => {

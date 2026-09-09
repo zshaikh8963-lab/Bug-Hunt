@@ -256,6 +256,14 @@ export const api = {
             body: JSON.stringify(data)
         });
         return res.json();
+    },
+
+    async reseedQuestionBank() {
+        const res = await fetch(`${API_BASE}/admin/questions/reseed`, {
+            method: 'POST',
+            headers: this.getAdminHeaders()
+        });
+        return res.json();
     }
 };
 

@@ -628,6 +628,92 @@ router.get('/questions-bank', (req, res) => {
         console.error('Question bank error:', err);
         return res.status(500).json({ error: 'Failed to retrieve question bank.' });
     }
+// POST /api/admin/questions/reseed - Force reload official tournament question banks
+router.post('/questions/reseed', async (req, res) => {
+    try {
+        const { r1Questions } = await import('../database/questions_r1.js');
+        const { r2JavaChallenges } = await import('../database/questions_r2.js');
+        const { r3PythonChallenges } = await import('../database/questions_r3.js');
+
+        // Clear existing questions and assignments
+        db.prepare('DELETE FROM mcq_questions').run();
+        db.prepare('DELETE FROM java_challenges').run();
+        db.prepare('DELETE FROM python_challenges').run();
+        db.prepare('DELETE FROM round_assignments').run();
+
+        // 1. Seed Round 1
+        const insertMcq = db.prepare(`
+            INSERT INTO mcq_questions (language, difficulty, title, question_text, code_snippet, options_json, correct_option_index, explanation, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+        `);
+        for (const q of r1Questions) {
+            insertMcq.run(
+                q.language,
+                q.difficulty || 'Easy',
+                q.title,
+                q.question_text,
+                q.code_snippet || '',
+                JSON.stringify(q.options),
+                q.correct_option_index,
+                q.explanation || ''
+            );
+        }
+
+        // 2. Seed Round 2
+        const insertJava = db.prepare(`
+            INSERT INTO java_challenges (challenge_code, title, description, code_snippet, buggy_line, bug_type, explanation, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        `);
+        for (const c of r2JavaChallenges) {
+            insertJava.run(
+                c.challenge_code,
+                c.title,
+                c.description,
+                c.code_snippet,
+                c.buggy_line,
+                c.bug_type,
+                c.explanation || ''
+            );
+        }
+
+        // 3. Seed Round 3
+        const insertPy = db.prepare(`
+            INSERT INTO python_challenges (challenge_code, title, description, expected_behavior, input_format, output_format, constraints, buggy_code, canonical_solution, faulty_line, bug_type, visible_tests_json, hidden_tests_json, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        `);
+        for (const p of r3PythonChallenges) {
+            insertPy.run(
+                p.challenge_code,
+                p.title,
+                p.description,
+                p.expected_behavior || '',
+                p.input_format || '',
+                p.output_format || '',
+                p.constraints || '',
+                p.buggy_code,
+                p.canonical_solution,
+                p.faulty_line,
+                p.bug_type,
+                JSON.stringify(p.visible_tests),
+                JSON.stringify(p.hidden_tests)
+            );
+        }
+
+        logAdminAction(req.admin.username, 'RESEED_QUESTION_BANK', 'QUESTIONS', 'Reloaded official question banks');
+
+        return res.json({
+            success: true,
+            message: `Official questions reloaded! Round 1: ${r1Questions.length} MCQs, Round 2: ${r2JavaChallenges.length} Challenges, Round 3: ${r3PythonChallenges.length} Challenges.`,
+            counts: {
+                r1: r1Questions.length,
+                r2: r2JavaChallenges.length,
+                r3: r3PythonChallenges.length
+            }
+        });
+    } catch (err) {
+        console.error('Reseed error:', err);
+        return res.status(500).json({ error: 'Failed to reseed questions: ' + err.message });
+    }
 });
 
 // ==========================================
