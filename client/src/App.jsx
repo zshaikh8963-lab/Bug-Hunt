@@ -392,7 +392,9 @@ export default function App() {
         setCurrentView('waiting');
       }
     } else if (roundNum === 3) {
-      setCurrentView('leaderboard');
+      // Students do NOT see the leaderboard.
+      // They remain on the Round 3 completion score card screen.
+      // The leaderboard is displayed only by admin / on the stage projector.
     }
   };
 

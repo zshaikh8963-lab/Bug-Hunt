@@ -17,7 +17,7 @@ export default function CompetitionBanner({ status, isPaused, message }) {
     return (
       <div className="bg-red-950/50 border-b border-cyber-red/50 px-4 py-2.5 text-center text-sm font-mono flex items-center justify-center gap-2 text-red-300">
         <AlertTriangle className="w-4 h-4 text-cyber-red shrink-0" />
-        <span>Competition has ended. {message || 'Check the final standings on the Leaderboard!'}</span>
+        <span>Competition has ended. {message || 'Final standings and winners will be announced on the main stage.'}</span>
       </div>
     );
   }

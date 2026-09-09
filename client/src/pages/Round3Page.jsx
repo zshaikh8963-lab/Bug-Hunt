@@ -242,6 +242,15 @@ export default function Round3Page({ team, onRoundCompleted, onLeaderboardClick,
             </div>
           </div>
 
+          <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 font-mono text-xs text-center mb-6 space-y-1">
+            <div className="font-bold flex items-center justify-center gap-1.5 text-amber-400">
+              <Trophy className="w-4 h-4" /> OFFICIAL RESULTS NOTICE
+            </div>
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              The tournament leaderboard and final winner announcements are controlled by the administrator and will be presented exclusively on the stage projector screen.
+            </p>
+          </div>
+
           <div className="flex flex-col gap-3">
             {onBack && (
               <button

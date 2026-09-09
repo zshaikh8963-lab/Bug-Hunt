@@ -118,7 +118,7 @@ export const Navbar = ({ currentScreen, onNavigate, setView, participant, onLogo
         }`}>
           {competitionStatus === 'PAUSED' && '⚠️ COMPETITION TEMPORARILY PAUSED BY ORGANIZER'}
           {competitionStatus === 'NOT_STARTED' && '🕒 COMPETITION HAS NOT STARTED YET'}
-          {competitionStatus === 'ENDED' && '🛑 COMPETITION HAS ENDED. VIEW LEADERBOARD FOR FINAL WINNERS.'}
+          {competitionStatus === 'ENDED' && '🛑 COMPETITION HAS CONCLUDED. WINNERS WILL BE ANNOUNCED BY ORGANIZERS.'}
         </div>
       )}
     </nav>
