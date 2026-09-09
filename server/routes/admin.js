@@ -781,8 +781,8 @@ router.post('/questions/import-csv', (req, res) => {
             }
 
             const insertJava = db.prepare(`
-                INSERT INTO java_challenges (challenge_code, title, description, code_snippet, buggy_line, bug_type, explanation, is_active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                INSERT INTO java_challenges (challenge_code, difficulty, title, description, code_snippet, buggy_line, bug_type, explanation, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
             `);
 
             let insertedCount = 0;
@@ -794,12 +794,13 @@ router.post('/questions/import-csv', (req, res) => {
 
                     const title = row.title || `Java Challenge ${i + 1}`;
                     const code = row.challenge_code || `JAVA-${String(i + 1).padStart(3, '0')}`;
+                    const difficulty = row.difficulty || (i < 3 ? 'Easy' : i < 6 ? 'Moderate' : 'Hard');
                     const desc = row.description || row.desc || 'Identify the buggy line and its bug type.';
                     const buggyLine = parseInt(row.buggy_line || row.line || '1', 10) || 1;
                     const bugType = row.bug_type || row.type || 'Logical Error';
                     const explanation = row.explanation || row.explain || '';
 
-                    insertJava.run(code, title, desc, codeSnippet, buggyLine, bugType, explanation);
+                    insertJava.run(code, difficulty, title, desc, codeSnippet, buggyLine, bugType, explanation);
                     insertedCount++;
                 }
             });
@@ -855,12 +856,13 @@ router.post('/questions/reseed', async (req, res) => {
 
         // 2. Seed Round 2
         const insertJava = db.prepare(`
-            INSERT INTO java_challenges (challenge_code, title, description, code_snippet, buggy_line, bug_type, explanation, is_active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            INSERT INTO java_challenges (challenge_code, difficulty, title, description, code_snippet, buggy_line, bug_type, explanation, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
         `);
         for (const c of r2JavaChallenges) {
             insertJava.run(
                 c.challenge_code,
+                c.difficulty || 'Moderate',
                 c.title,
                 c.description,
                 c.code_snippet,

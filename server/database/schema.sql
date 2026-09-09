@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS mcq_questions (
 CREATE TABLE IF NOT EXISTS java_challenges (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     challenge_code TEXT UNIQUE,          -- e.g. 'JAVA-001'
+    difficulty TEXT DEFAULT 'Moderate',  -- 'Easy', 'Moderate', 'Hard'
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     code_snippet TEXT NOT NULL,         -- Java code with line numbers

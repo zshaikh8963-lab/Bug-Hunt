@@ -153,13 +153,42 @@ router.get('/current', (req, res) => {
                 questionIds = selected.sort(() => Math.random() - 0.5);
 
             } else if (roundNum === 2) {
-                // Exactly 3 Java Bug Challenges
-                const pool = db.prepare(`
+                // Official Organizer Requirement: Exactly 3 Challenges in sequence Easy -> Moderate -> Hard
+                const easy = db.prepare(`
                     SELECT id FROM java_challenges 
-                    WHERE is_active = 1 
-                    ORDER BY RANDOM() LIMIT 3
-                `).all();
-                questionIds = pool.map(p => p.id);
+                    WHERE is_active = 1 AND LOWER(difficulty) = 'easy'
+                    ORDER BY RANDOM() LIMIT 1
+                `).get();
+
+                const moderate = db.prepare(`
+                    SELECT id FROM java_challenges 
+                    WHERE is_active = 1 AND LOWER(difficulty) = 'moderate'
+                    ORDER BY RANDOM() LIMIT 1
+                `).get();
+
+                const hard = db.prepare(`
+                    SELECT id FROM java_challenges 
+                    WHERE is_active = 1 AND (LOWER(difficulty) = 'hard' OR LOWER(difficulty) LIKE '%hard%')
+                    ORDER BY RANDOM() LIMIT 1
+                `).get();
+
+                const selected = [easy?.id, moderate?.id, hard?.id].filter(Boolean);
+
+                // Fallback in case difficulty tags are missing or question pool is constrained
+                if (selected.length < 3) {
+                    const existingSet = new Set(selected);
+                    const remaining = db.prepare(`
+                        SELECT id FROM java_challenges 
+                        WHERE is_active = 1 
+                        ORDER BY RANDOM()
+                    `).all().filter(c => !existingSet.has(c.id));
+                    for (const c of remaining) {
+                        if (selected.length >= 3) break;
+                        selected.push(c.id);
+                    }
+                }
+
+                questionIds = selected.slice(0, 3);
 
             } else if (roundNum === 3) {
                 // Exactly 2 Python Challenges
@@ -220,6 +249,7 @@ router.get('/current', (req, res) => {
                         challenge_id: j.id,
                         challenge_code: j.challenge_code,
                         title: j.title,
+                        difficulty: j.difficulty || (i === 0 ? 'Easy' : i === 1 ? 'Moderate' : 'Hard'),
                         description: j.description,
                         code_snippet: j.code_snippet, // with line numbers
                         points: 5

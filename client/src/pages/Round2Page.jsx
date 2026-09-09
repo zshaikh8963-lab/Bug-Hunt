@@ -304,12 +304,24 @@ export default function Round2Page({ team, onRoundCompleted, onLeaderboardClick,
         
         {/* Header Indicators */}
         <div className="flex items-center justify-between mb-4 font-mono text-xs">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="px-3 py-1 rounded bg-slate-800 text-slate-200 font-bold">
               CHALLENGE {currentIndex + 1} / 3
             </span>
-            <span className="px-2 py-1 rounded bg-amber-500/10 border border-amber-400/30 text-amber-400 font-bold">
+            <span className={`px-2.5 py-1 rounded border text-[11px] font-bold uppercase tracking-wider ${
+              (currentTask?.difficulty || '').toLowerCase() === 'easy'
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                : (currentTask?.difficulty || '').toLowerCase() === 'hard'
+                ? 'border-rose-500/40 bg-rose-500/10 text-rose-400'
+                : 'border-amber-400/40 bg-amber-500/10 text-amber-400'
+            }`}>
+              [{currentTask?.difficulty || (currentIndex === 0 ? 'Easy' : currentIndex === 1 ? 'Moderate' : 'Hard')}]
+            </span>
+            <span className="px-2 py-1 rounded bg-cyan-500/10 border border-cyan-400/30 text-cyan-300 font-bold">
               JAVA (5 MARKS)
+            </span>
+            <span className="hidden sm:inline-block text-[11px] text-slate-500 font-normal">
+              • Sequence: Easy → Moderate → Hard
             </span>
           </div>
 

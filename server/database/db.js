@@ -109,17 +109,29 @@ try {
         }).catch(err => console.error('[DB] Failed to auto-seed R1:', err));
     }
 
+    // Ensure difficulty column exists in java_challenges
+    try {
+        const javaCols = db.prepare("PRAGMA table_info(java_challenges)").all();
+        if (!javaCols.some(c => c.name === 'difficulty')) {
+            db.prepare("ALTER TABLE java_challenges ADD COLUMN difficulty TEXT DEFAULT 'Moderate'").run();
+            console.log('[DB] Added difficulty column to java_challenges.');
+        }
+    } catch (e) {
+        console.error('[DB] Migration error for java_challenges difficulty:', e);
+    }
+
     const javaCount = db.prepare('SELECT COUNT(*) as count FROM java_challenges').get();
     if (javaCount.count === 0) {
         import('./questions_r2.js').then(({ r2JavaChallenges }) => {
             const insertJava = db.prepare(`
-                INSERT INTO java_challenges (challenge_code, title, description, code_snippet, buggy_line, bug_type, explanation, is_active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                INSERT INTO java_challenges (challenge_code, difficulty, title, description, code_snippet, buggy_line, bug_type, explanation, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
             `);
             const insertAll = db.transaction((challenges) => {
                 for (const c of challenges) {
                     insertJava.run(
                         c.challenge_code,
+                        c.difficulty || 'Moderate',
                         c.title,
                         c.description,
                         c.code_snippet,
