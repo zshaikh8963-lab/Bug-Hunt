@@ -226,14 +226,16 @@ export default function App() {
 
     // Only auto-advance if team is waiting in the lobby
     if (currentView === 'waiting') {
+      try {
+        soundService.playVictory?.();
+      } catch (e) {
+        // Audio error non-blocking
+      }
       if (round === 1) {
-        soundService.playVictory();
         navigateTo('r1');
       } else if (round === 2) {
-        soundService.playVictory();
         navigateTo('r2');
       } else if (round === 3) {
-        soundService.playVictory();
         navigateTo('r3');
       }
     }

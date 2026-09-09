@@ -106,6 +106,11 @@ class SoundController {
     });
   }
 
+  // Victory fanfare (alias for round complete)
+  playVictory() {
+    this.playRoundComplete();
+  }
+
   // Soft interface click
   playClick() {
     if (this.muted) return;
@@ -114,4 +119,18 @@ class SoundController {
   }
 }
 
-export const soundService = new SoundController();
+const rawSoundService = new SoundController();
+
+// Safe proxy wrapper to guarantee sound calls never crash the UI
+export const soundService = new Proxy(rawSoundService, {
+  get(target, prop) {
+    if (prop in target) {
+      const val = target[prop];
+      if (typeof val === 'function') {
+        return val.bind(target);
+      }
+      return val;
+    }
+    return () => {};
+  }
+});
