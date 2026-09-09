@@ -211,20 +211,13 @@ export default function Round1Page({ team, onRoundCompleted, onLeaderboardClick,
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={onLeaderboardClick}
-              className="flex-1 py-3 rounded-xl border border-cyber-cyan/50 bg-cyber-cyan/10 text-cyber-cyan font-mono font-bold text-xs hover:bg-cyber-cyan/20 transition flex items-center justify-center gap-2"
-            >
-              <Trophy className="w-4 h-4" />
-              VIEW ROUND 1 LEADERBOARD
-            </button>
+          <div className="flex flex-col gap-3">
             {onBack && (
               <button
                 onClick={onBack}
-                className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono font-bold text-xs transition"
+                className="w-full py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-mono font-bold text-xs uppercase tracking-wider transition shadow-lg"
               >
-                HOME
+                RETURN TO TOURNAMENT LOBBY
               </button>
             )}
           </div>

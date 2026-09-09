@@ -242,20 +242,13 @@ export default function Round3Page({ team, onRoundCompleted, onLeaderboardClick,
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={onLeaderboardClick}
-              className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-cyber-green to-emerald-500 text-slate-950 font-bold font-mono text-sm uppercase tracking-wider hover:opacity-90 transition flex items-center justify-center gap-2 shadow-[0_0_20px_#00ff8840]"
-            >
-              <Trophy className="w-5 h-5" />
-              VIEW FINAL TOURNAMENT LEADERBOARD
-            </button>
+          <div className="flex flex-col gap-3">
             {onBack && (
               <button
                 onClick={onBack}
-                className="px-6 py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono font-bold text-sm transition"
+                className="w-full py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-mono font-bold text-sm uppercase tracking-wider transition shadow-lg"
               >
-                HOME
+                RETURN TO TOURNAMENT LOBBY
               </button>
             )}
           </div>

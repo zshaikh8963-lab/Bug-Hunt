@@ -51,20 +51,6 @@ export const Navbar = ({ currentScreen, onNavigate, setView, participant, onLogo
 
           {/* Navigation Links */}
           <div className="flex items-center gap-1 sm:gap-2">
-            {/* Leaderboard Link */}
-            <button
-              onClick={() => handleNav('leaderboard')}
-              className={`px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${
-                currentScreen === 'leaderboard'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/50'
-              }`}
-              title="Live Leaderboard"
-            >
-              <Trophy className="w-4 h-4 text-amber-400" />
-              <span className="hidden sm:inline">Leaderboard</span>
-            </button>
-
             {/* Rules Modal Link */}
             <button
               onClick={() => handleNav('rules')}

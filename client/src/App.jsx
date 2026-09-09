@@ -27,7 +27,9 @@ const getInitialView = () => {
     const search = window.location.search.toLowerCase();
     if (hash === '#projector' || pathname.includes('/projector') || search.includes('projector')) return 'projector';
     if (hash === '#admin' || pathname.includes('/admin') || search.includes('admin')) return 'admin';
-    if (hash === '#leaderboard' || pathname.includes('/leaderboard') || search.includes('leaderboard')) return 'leaderboard';
+    if (hash === '#leaderboard' || pathname.includes('/leaderboard') || search.includes('leaderboard')) {
+      return Boolean(localStorage.getItem('bughunt_admin_token')) ? 'leaderboard' : 'landing';
+    }
     if (hash === '#register' || pathname.includes('/register') || search.includes('register')) return 'register';
     if (hash === '#waiting' || pathname.includes('/waiting')) return 'waiting';
     if (hash === '#r1') return 'r1';
@@ -107,9 +109,17 @@ export default function App() {
         return;
       }
 
-      // Leaderboard: #leaderboard or /leaderboard or ?leaderboard
+      // Leaderboard (Admin Only): #leaderboard or /leaderboard or ?leaderboard
       if (hash === '#leaderboard' || pathname.includes('/leaderboard') || search.includes('leaderboard')) {
-        setCurrentView('leaderboard');
+        const isAdmin = Boolean(localStorage.getItem('bughunt_admin_token'));
+        if (isAdmin) {
+          setCurrentView('leaderboard');
+        } else {
+          setCurrentView('landing');
+          if (window.location.hash) {
+            window.history.pushState(null, '', window.location.pathname);
+          }
+        }
         return;
       }
 
@@ -480,7 +490,6 @@ export default function App() {
           <Round1Page
             team={team || { team_id: 'DEMO-001', team_name: 'Tournament Team', department: 'COMPS' }}
             onRoundCompleted={() => handleRoundCompleted(1)}
-            onLeaderboardClick={() => navigateTo('leaderboard')}
             onBack={() => navigateTo('landing')}
           />
         )}
@@ -489,7 +498,6 @@ export default function App() {
           <Round2Page
             team={team || { team_id: 'DEMO-001', team_name: 'Tournament Team', department: 'COMPS' }}
             onRoundCompleted={() => handleRoundCompleted(2)}
-            onLeaderboardClick={() => navigateTo('leaderboard')}
             onBack={() => navigateTo('landing')}
           />
         )}
@@ -498,17 +506,28 @@ export default function App() {
           <Round3Page
             team={team || { team_id: 'DEMO-001', team_name: 'Tournament Team', department: 'COMPS' }}
             onRoundCompleted={() => handleRoundCompleted(3)}
-            onLeaderboardClick={() => navigateTo('leaderboard')}
             onBack={() => navigateTo('landing')}
           />
         )}
 
         {currentView === 'leaderboard' && (
-          <LeaderboardPage
-            onBack={() => navigateTo('landing')}
-            onOpenProjector={() => navigateTo('projector')}
-            onOpenAdmin={() => navigateTo('admin')}
-          />
+          Boolean(localStorage.getItem('bughunt_admin_token')) ? (
+            <LeaderboardPage
+              onBack={() => navigateTo('admin')}
+              onOpenProjector={() => navigateTo('projector')}
+              onOpenAdmin={() => navigateTo('admin')}
+            />
+          ) : (
+            <LandingPage
+              onStartRegistration={() => navigateTo('register')}
+              onResumeSession={handleResumeSession}
+              onOpenRules={() => setIsRulesOpen(true)}
+              onOpenAdmin={() => navigateTo('admin')}
+              onOpenProjector={() => navigateTo('projector')}
+              onRunDemo={handleRunDemo}
+              compStatus={compStatus}
+            />
+          )
         )}
 
         {currentView === 'projector' && (
