@@ -874,12 +874,13 @@ router.post('/questions/reseed', async (req, res) => {
 
         // 3. Seed Round 3
         const insertPy = db.prepare(`
-            INSERT INTO python_challenges (challenge_code, title, description, expected_behavior, input_format, output_format, constraints, buggy_code, canonical_solution, faulty_line, bug_type, visible_tests_json, hidden_tests_json, is_active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            INSERT INTO python_challenges (challenge_code, difficulty, title, description, expected_behavior, input_format, output_format, constraints, buggy_code, canonical_solution, faulty_line, bug_type, visible_tests_json, hidden_tests_json, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         `);
         for (const p of r3PythonChallenges) {
             insertPy.run(
                 p.challenge_code,
+                p.difficulty || 'Easy',
                 p.title,
                 p.description,
                 p.expected_behavior || '',

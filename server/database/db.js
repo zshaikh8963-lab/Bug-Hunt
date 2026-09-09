@@ -146,17 +146,29 @@ try {
         }).catch(err => console.error('[DB] Failed to auto-seed R2:', err));
     }
 
+    // Ensure difficulty column exists in python_challenges
+    try {
+        const pyCols = db.prepare("PRAGMA table_info(python_challenges)").all();
+        if (!pyCols.some(c => c.name === 'difficulty')) {
+            db.prepare("ALTER TABLE python_challenges ADD COLUMN difficulty TEXT DEFAULT 'Easy'").run();
+            console.log('[DB] Added difficulty column to python_challenges.');
+        }
+    } catch (e) {
+        console.error('[DB] Migration error for python_challenges difficulty:', e);
+    }
+
     const pyCount = db.prepare('SELECT COUNT(*) as count FROM python_challenges').get();
     if (pyCount.count === 0) {
         import('./questions_r3.js').then(({ r3PythonChallenges }) => {
             const insertPy = db.prepare(`
-                INSERT INTO python_challenges (challenge_code, title, description, expected_behavior, input_format, output_format, constraints, buggy_code, canonical_solution, faulty_line, bug_type, visible_tests_json, hidden_tests_json, is_active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                INSERT INTO python_challenges (challenge_code, difficulty, title, description, expected_behavior, input_format, output_format, constraints, buggy_code, canonical_solution, faulty_line, bug_type, visible_tests_json, hidden_tests_json, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
             `);
             const insertAll = db.transaction((challenges) => {
                 for (const p of challenges) {
                     insertPy.run(
                         p.challenge_code,
+                        p.difficulty || 'Easy',
                         p.title,
                         p.description,
                         p.expected_behavior || '',

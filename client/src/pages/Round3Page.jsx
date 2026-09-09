@@ -304,9 +304,18 @@ export default function Round3Page({ team, onRoundCompleted, onLeaderboardClick,
           
           <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/90 shadow-xl space-y-4 font-mono">
             <div className="flex items-center justify-between">
-              <span className="px-2.5 py-1 rounded bg-cyber-green/20 text-cyber-green font-bold text-xs">
-                CHALLENGE {currentIndex + 1} OF 2 ({currentIndex === 0 ? '12 MARKS' : '13 MARKS'})
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded bg-cyber-green/20 text-cyber-green font-bold text-xs">
+                  CHALLENGE {currentIndex + 1} OF 2 ({currentTask?.points || (currentIndex === 0 ? 12 : 13)} MARKS)
+                </span>
+                <span className={`px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${
+                  (currentTask?.difficulty || '').toLowerCase() === 'easy'
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                    : 'border-rose-500/40 bg-rose-500/10 text-rose-400'
+                }`}>
+                  [{currentTask?.difficulty || (currentIndex === 0 ? 'Easy' : 'Hard')}]
+                </span>
+              </div>
               <span className="text-xs text-slate-500">{currentTask?.challenge_code}</span>
             </div>
 

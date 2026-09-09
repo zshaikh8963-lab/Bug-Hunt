@@ -191,13 +191,35 @@ router.get('/current', (req, res) => {
                 questionIds = selected.slice(0, 3);
 
             } else if (roundNum === 3) {
-                // Exactly 2 Python Challenges
-                const pool = db.prepare(`
+                // Official Organizer Requirement: Exactly 2 Python Challenges (1 Easy + 1 Hard)
+                const easy = db.prepare(`
                     SELECT id FROM python_challenges 
-                    WHERE is_active = 1 
-                    ORDER BY RANDOM() LIMIT 2
-                `).all();
-                questionIds = pool.map(p => p.id);
+                    WHERE is_active = 1 AND LOWER(difficulty) = 'easy'
+                    ORDER BY RANDOM() LIMIT 1
+                `).get();
+
+                const hard = db.prepare(`
+                    SELECT id FROM python_challenges 
+                    WHERE is_active = 1 AND LOWER(difficulty) = 'hard'
+                    ORDER BY RANDOM() LIMIT 1
+                `).get();
+
+                const selected = [easy?.id, hard?.id].filter(Boolean);
+
+                if (selected.length < 2) {
+                    const existingSet = new Set(selected);
+                    const remaining = db.prepare(`
+                        SELECT id FROM python_challenges 
+                        WHERE is_active = 1 
+                        ORDER BY RANDOM()
+                    `).all().filter(c => !existingSet.has(c.id));
+                    for (const c of remaining) {
+                        if (selected.length >= 2) break;
+                        selected.push(c.id);
+                    }
+                }
+
+                questionIds = selected.slice(0, 2);
             }
 
             if (questionIds.length > 0) {
@@ -262,6 +284,8 @@ router.get('/current', (req, res) => {
                 if (p) {
                     let visibleTests = [];
                     try { visibleTests = JSON.parse(p.visible_tests_json); } catch (e) { visibleTests = []; }
+                    const diff = p.difficulty || (i === 0 ? 'Easy' : 'Hard');
+                    const pts = diff.toLowerCase() === 'easy' ? 12 : 13;
                     formattedTasks.push({
                         task_index: i,
                         id: p.id,
@@ -269,14 +293,16 @@ router.get('/current', (req, res) => {
                         challenge_id: p.id,
                         challenge_code: p.challenge_code,
                         title: p.title,
+                        difficulty: diff,
                         description: p.description,
                         expected_behavior: p.expected_behavior,
                         input_format: p.input_format,
                         output_format: p.output_format,
                         constraints: p.constraints,
                         buggy_code: p.buggy_code,
+                        faulty_line: p.faulty_line,
                         visible_tests: visibleTests, // hidden_tests are NEVER sent to frontend!
-                        points: i === 0 ? 12 : 13
+                        points: pts
                     });
                 }
             }

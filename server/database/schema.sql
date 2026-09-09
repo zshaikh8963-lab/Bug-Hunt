@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS java_challenges (
 CREATE TABLE IF NOT EXISTS python_challenges (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     challenge_code TEXT UNIQUE NOT NULL, -- e.g. 'PY-001'
+    difficulty TEXT DEFAULT 'Easy',     -- 'Easy', 'Hard'
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     expected_behavior TEXT NOT NULL,
