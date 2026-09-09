@@ -655,8 +655,23 @@ function parseCorrectOptionIndex(val, options) {
     return 0;
 }
 
-// GET /api/admin/questions/csv-template - Download starter CSV template for Round 1
+// GET /api/admin/questions/csv-template - Download starter CSV template for Round 1 or Round 2
 router.get('/questions/csv-template', (req, res) => {
+    const round = req.query.round || 'r1';
+
+    if (round === 'r2') {
+        const csvContent = [
+            'challenge_code,title,description,code_snippet,buggy_line,bug_type,explanation',
+            'JAVA-001,Sum Greater-Than Comparison,Examine this Java arithmetic method. Identify which line contains the bug and what type of bug it is.,"1  public class Main {\\n2      public static void main(String[] args) {\\n3          int a = 10;\\n4          int b = 20;\\n5          int result = a + b;\\n6          if (result > 40) {\\n7              System.out.println(\\"\"Correct\\"\" );\\n8          } else {\\n9              System.out.println(\\"\"Incorrect\\"\" );\\n10         }\\n11     }\\n12 }",6,Logical Error,"Sum of 10+20 is 30, but line 6 checks result > 40."',
+            'JAVA-002,Variable Declaration Semicolon,Examine this variable declaration. Identify which line contains the bug and what type of bug it is.,"1  public class Main {\\n2      public static void main(String[] args) {\\n3          int number = 25\\n4          System.out.println(number);\\n5      }\\n6  }",3,Syntax Error,"Line 3 is missing a semicolon after 25."',
+            'JAVA-003,Arithmetic Division by Zero,Examine this division calculation. Identify which line contains the bug and what type of bug it is.,"1  public class Main {\\n2      public static void main(String[] args) {\\n3          int a = 10;\\n4          int b = 0;\\n5          int result = a / b;\\n6          System.out.println(result);\\n7      }\\n8  }",5,Exception,"Line 5 divides by zero, throwing ArithmeticException."'
+        ].join('\n');
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename="ROUND_2_JAVA_TEMPLATE.csv"');
+        return res.send(csvContent);
+    }
+
     const csvContent = [
         'language,difficulty,title,question_text,code_snippet,option_a,option_b,option_c,option_d,correct_option,explanation',
         'C,Easy,Post-Increment Output,What is the output of the following C code?,"int x = 5;\\nprintf(\\"\"%d\\\"\", x++);",4,5,6,Error,B,"x++ evaluates to 5 before incrementing."',
@@ -749,6 +764,54 @@ router.post('/questions/import-csv', (req, res) => {
                 success: true,
                 count: insertedCount,
                 message: `Successfully imported ${insertedCount} Round 1 MCQs from CSV (${mode === 'replace' ? 'replaced existing questions' : 'added to existing'})!`
+            });
+        }
+
+        if (round === 'r2') {
+            const hasRequired = headers.some(h => ['code_snippet', 'code', 'title', 'buggy_line'].includes(h));
+            if (!hasRequired) {
+                return res.status(400).json({
+                    error: 'CSV missing required Round 2 columns. Must contain headers: title, description, code_snippet, buggy_line, bug_type, explanation'
+                });
+            }
+
+            if (mode === 'replace') {
+                db.prepare('DELETE FROM java_challenges').run();
+                db.prepare('DELETE FROM round_assignments WHERE round_num = 2').run();
+            }
+
+            const insertJava = db.prepare(`
+                INSERT INTO java_challenges (challenge_code, title, description, code_snippet, buggy_line, bug_type, explanation, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            `);
+
+            let insertedCount = 0;
+            const insertTx = db.transaction((rows) => {
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    const codeSnippet = row.code_snippet || row.code || '';
+                    if (!codeSnippet) continue;
+
+                    const title = row.title || `Java Challenge ${i + 1}`;
+                    const code = row.challenge_code || `JAVA-${String(i + 1).padStart(3, '0')}`;
+                    const desc = row.description || row.desc || 'Identify the buggy line and its bug type.';
+                    const buggyLine = parseInt(row.buggy_line || row.line || '1', 10) || 1;
+                    const bugType = row.bug_type || row.type || 'Logical Error';
+                    const explanation = row.explanation || row.explain || '';
+
+                    insertJava.run(code, title, desc, codeSnippet, buggyLine, bugType, explanation);
+                    insertedCount++;
+                }
+            });
+
+            insertTx(objects);
+
+            logAdminAction(req.admin.username, 'IMPORT_CSV_QUESTIONS', 'ROUND_2', `Imported ${insertedCount} Java challenges via CSV (mode=${mode})`);
+
+            return res.json({
+                success: true,
+                count: insertedCount,
+                message: `Successfully imported ${insertedCount} Round 2 Java challenges from CSV (${mode === 'replace' ? 'replaced existing challenges' : 'added to existing'})!`
             });
         }
 

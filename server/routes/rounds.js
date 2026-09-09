@@ -386,9 +386,9 @@ router.post('/r2/submit', (req, res) => {
             return res.status(400).json({ error: 'Challenge already submitted.' });
         }
 
-        // Scoring rules:
-        // Correct Line = 3 Marks
-        // Correct Bug Type = 2 Marks
+        // Scoring rules (Organizer Specification):
+        // Correct Line = 2 Marks
+        // Correct Bug Type = 3 Marks
         const lineSubmitted = parseInt(selected_line, 10);
         const lineCorrect = lineSubmitted === j.buggy_line;
 
@@ -398,8 +398,8 @@ router.post('/r2/submit', (req, res) => {
             (normActualType.includes(normSubmittedType) || normSubmittedType.includes(normActualType));
 
         let scoreAwarded = 0;
-        if (lineCorrect) scoreAwarded += 3;
-        if (typeCorrect) scoreAwarded += 2;
+        if (lineCorrect) scoreAwarded += 2;
+        if (typeCorrect) scoreAwarded += 3;
 
         db.transaction(() => {
             db.prepare(`

@@ -323,21 +323,34 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
   // Download official CSV template
   const handleDownloadCSVTemplate = () => {
     soundService.playClick();
-    const csvContent = [
-      'language,difficulty,title,question_text,code_snippet,option_a,option_b,option_c,option_d,correct_option,explanation',
-      'C,Easy,Post-Increment Output,What is the output of the following C code?,"int x = 5;\\nprintf(\\"\"%d\\\"\", x++);",4,5,6,Error,B,"x++ evaluates to 5 before incrementing."',
-      'C,Easy,Standard I/O Header,Which header file is required for printf()?,stdlib.h,string.h,stdio.h,math.h,C,"stdio.h contains declaration for printf()."',
-      'C++,Easy,Standard Output Stream,Which stream is commonly used for output in C++?,cin,cout,print,output,B,"std::cout is the standard output stream."',
-      'Java,Easy,Object Instantiation Keyword,Which keyword is used to create an object in Java?,create,object,new,malloc,C,"The new operator instantiates a class."',
-      'Python,Easy,Single-Line Comment Symbol,Which symbol is used for a single-line comment in Python?,//,#,/*,--,B,"Python uses # for single-line comments."',
-      'HTML,Easy,HTML Full Form,What does HTML stand for?,Hyper Text Markup Language,High Text Machine Language,Hyperlink Text Management Language,Home Tool Markup Language,A,"HTML stands for HyperText Markup Language."'
-    ].join('\n');
+    let csvContent = '';
+    let fileName = 'ROUND_1_MCQ_TEMPLATE.csv';
+
+    if (activeRound === 'r2') {
+      fileName = 'ROUND_2_JAVA_TEMPLATE.csv';
+      csvContent = [
+        'challenge_code,title,description,code_snippet,buggy_line,bug_type,explanation',
+        'JAVA-001,Sum Greater-Than Comparison,Examine this Java arithmetic method. Identify which line contains the bug and what type of bug it is.,"1  public class Main {\\n2      public static void main(String[] args) {\\n3          int a = 10;\\n4          int b = 20;\\n5          int result = a + b;\\n6          if (result > 40) {\\n7              System.out.println(\\"\"Correct\\"\" );\\n8          } else {\\n9              System.out.println(\\"\"Incorrect\\"\" );\\n10         }\\n11     }\\n12 }",6,Logical Error,"Sum of 10+20 is 30, but line 6 checks result > 40."',
+        'JAVA-002,Variable Declaration Semicolon,Examine this variable declaration. Identify which line contains the bug and what type of bug it is.,"1  public class Main {\\n2      public static void main(String[] args) {\\n3          int number = 25\\n4          System.out.println(number);\\n5      }\\n6  }",3,Syntax Error,"Line 3 is missing a semicolon after 25."',
+        'JAVA-003,Arithmetic Division by Zero,Examine this division calculation. Identify which line contains the bug and what type of bug it is.,"1  public class Main {\\n2      public static void main(String[] args) {\\n3          int a = 10;\\n4          int b = 0;\\n5          int result = a / b;\\n6          System.out.println(result);\\n7      }\\n8  }",5,Exception,"Line 5 divides by zero, throwing ArithmeticException."'
+      ].join('\n');
+    } else {
+      csvContent = [
+        'language,difficulty,title,question_text,code_snippet,option_a,option_b,option_c,option_d,correct_option,explanation',
+        'C,Easy,Post-Increment Output,What is the output of the following C code?,"int x = 5;\\nprintf(\\"\"%d\\\"\", x++);",4,5,6,Error,B,"x++ evaluates to 5 before incrementing."',
+        'C,Easy,Standard I/O Header,Which header file is required for printf()?,stdlib.h,string.h,stdio.h,math.h,C,"stdio.h contains declaration for printf()."',
+        'C++,Easy,Standard Output Stream,Which stream is commonly used for output in C++?,cin,cout,print,output,B,"std::cout is the standard output stream."',
+        'Java,Easy,Object Instantiation Keyword,Which keyword is used to create an object in Java?,create,object,new,malloc,C,"The new operator instantiates a class."',
+        'Python,Easy,Single-Line Comment Symbol,Which symbol is used for a single-line comment in Python?,//,#,/*,--,B,"Python uses # for single-line comments."',
+        'HTML,Easy,HTML Full Form,What does HTML stand for?,Hyper Text Markup Language,High Text Machine Language,Hyperlink Text Management Language,Home Tool Markup Language,A,"HTML stands for HyperText Markup Language."'
+      ].join('\n');
+    }
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', 'ROUND_1_MCQ_TEMPLATE.csv');
+    link.setAttribute('download', fileName);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -514,7 +527,7 @@ export default function QuestionBankEditor({ questionsBank = { r1: [], r2: [], r
           </div>
           <h3 className="font-bold text-sm text-slate-100 mb-1">Identify the Bug (Java)</h3>
           <p className="text-[11px] text-slate-400">
-            Buggy Line MCQ (3 pts) & Bug Type MCQ (2 pts) challenges.
+            Buggy Line (2 pts) & Bug Type (3 pts) — 3 mins per question (3 assigned per team).
           </p>
           {activeRound === 'r2' && (
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-amber-400" />

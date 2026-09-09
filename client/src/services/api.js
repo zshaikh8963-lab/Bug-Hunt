@@ -277,7 +277,7 @@ export const api = {
 
     getCSVTemplateUrl(round = 'r1') {
         const token = localStorage.getItem('bughunt_admin_token') || '';
-        return `${API_BASE}/admin/questions/csv-template?token=${encodeURIComponent(token)}`;
+        return `${API_BASE}/admin/questions/csv-template?round=${encodeURIComponent(round)}&token=${encodeURIComponent(token)}`;
     }
 };
 
